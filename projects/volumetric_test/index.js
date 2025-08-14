@@ -103,7 +103,7 @@ function init() {
         // THREE.Mesh
         const geometry = new THREE.BoxGeometry( volume.xLength, volume.yLength, volume.zLength );
         geometry.translate( volume.xLength / 2 - 0.5, volume.yLength / 2 - 0.5, volume.zLength / 2 - 0.5 );
-
+        
         const mesh = new THREE.Mesh( geometry, material );
         scene.add( mesh );
 
