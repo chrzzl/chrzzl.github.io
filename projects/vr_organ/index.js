@@ -28,7 +28,7 @@ function init() {
   }
 
   camera.up.set(0, 0, 1);
-  camera.lookAt(0, 0, 0);
+  //camera.lookAt(0, 0, 0);
 
   // --- Renderer with XR enabled ---
   renderer = new THREE.WebGLRenderer({ antialias: true });
