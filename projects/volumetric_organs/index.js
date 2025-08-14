@@ -10,16 +10,18 @@ import { VolumeRenderShader1 } from 'three/addons/shaders/VolumeShader.js';
 // =======================================
 // Globals / State
 // =======================================
-const ORGAN = 'kidney'
+const ORGAN = 'brain'; // Change this to 'eye', 'heart', 'tongue', 'brain', 'kidney' as needed
 
-const file_path = 'data/brain_256.nrrd'; // Path to the NRRD file
+// All nrrd files should be 256x256x256
+const file_path = `data/${ORGAN}_256.nrrd`; // Path to the NRRD file
 
 const ISO_THRESHOLDS = {
   eye: 0.20,
   heart: 0.40,
   tongue: 0.30,
   brain: 0.24,
-  kidney: 0.40
+  kidney: 0.40,
+  placeholder: 0.50 // Default threshold for placeholder
 };
 
 const STATE = {
@@ -127,7 +129,6 @@ function createGUI() {
 // Volume Loading & Material Setup
 // =======================================
 function loadVolume() {
-  // NOTE: kidney_256.nrrd expected size: 256x256x256
   new NRRDLoader().load(file_path, (volume) => {
     // --- Create 3D texture from volume data (single-channel -> Red) ---
     const texture = new THREE.Data3DTexture(
