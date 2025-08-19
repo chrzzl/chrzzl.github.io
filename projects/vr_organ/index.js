@@ -8,7 +8,7 @@ import { InteractiveGroup } from 'three/addons/interactive/InteractiveGroup.js';
 
 // === CONFIG ===
 const usePerspectiveCamera = true; // ← Toggle this to switch views
-const showWireframe = false;      // ← Toggle this to show/hide wireframe
+const showWireframe = true;      // ← Toggle this to show/hide wireframe
 
 let scene, camera, renderer, rotatingGroup;
 
@@ -30,8 +30,13 @@ function init() {
     camera.position.set(100, 0, 0);
   }
 
+  const center = new THREE.Vector3(0, 0, 0);
+  const radius = 500;
+
+  // Move camera back along Z axis
+  camera.position.set(128, 128, 128 + radius * 1.5);
+  // camera.lookAt(center);
   // camera.up.set(0, 0, 1);
-  // camera.lookAt(0, 0, 0);
 
   // --- Renderer with XR enabled ---
   renderer = new THREE.WebGLRenderer({ antialias: true });
