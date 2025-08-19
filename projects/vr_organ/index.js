@@ -3,6 +3,9 @@ import { NRRDLoader } from 'three/addons/loaders/NRRDLoader.js';
 import { VolumeRenderShader1 } from 'three/addons/shaders/VolumeShader.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
+import { InteractiveGroup } from 'three/addons/interactive/InteractiveGroup.js';
+
+
 // === CONFIG ===
 const usePerspectiveCamera = true; // ← Toggle this to switch views
 const showWireframe = false;      // ← Toggle this to show/hide wireframe
@@ -27,13 +30,14 @@ function init() {
     camera.position.set(100, 0, 0);
   }
 
-  //camera.up.set(0, 0, 1);
-  //camera.lookAt(0, 0, 0);
+  camera.up.set(0, 0, 1);
+  camera.lookAt(0, 0, 0);
 
   // --- Renderer with XR enabled ---
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setAnimationLoop(animate); // XR-safe loop
   renderer.xr.enabled = true; // XR support
   document.body.appendChild(renderer.domElement);
 
@@ -46,7 +50,9 @@ function init() {
   rotatingGroup = new THREE.Group();
   scene.add(rotatingGroup);
 
-  renderer.setAnimationLoop(animate); // XR-safe loop
+  const group = new InteractiveGroup();
+  group.listenToPointerEvents( renderer, camera );
+  scene.add( group );
 }
 
 function addVolumeBox(nrrdPath, center, size) {
