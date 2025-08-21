@@ -9,7 +9,7 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 let scene, camera, renderer, rotatingGroup;
 let thresholdUniformRef; // keep reference for GUI control
-let guiMesh;
+let geometryGuiMesh, dataGuiMesh;
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
@@ -92,7 +92,12 @@ function init() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
-  document.body.appendChild(VRButton.createButton(renderer));
+  const vrButton = VRButton.createButton(renderer);
+  vrButton.style.position = 'absolute';
+  vrButton.style.top = '50px';
+  vrButton.style.height = '50px';
+  vrButton.style.zIndex = '999';
+  document.body.appendChild(vrButton);
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -105,31 +110,45 @@ function init() {
 }
 
 function setupGUI() {
-  const gui = new GUI({ width: 280 });
-  gui.add(params, 'threshold', 0, 1, 0.01).name('Isosurface Threshold').onChange((value) => {
-    if (thresholdUniformRef) thresholdUniformRef.value = value;
-  });
-  gui.add(params, 'scale', 0.5, 1.5, 0.01).name('Scale').onChange((value) => {
+  // Geometry GUI
+  const geometryGui = new GUI({ width: 280 });
+  geometryGui.title('Object Transforms');
+  geometryGui.add(params, 'scale', 0.5, 1.5, 0.01).name('Scale').onChange((value) => {
     rotatingGroup.scale.set(value, value, value);
   });
-  gui.add(params, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((value) => {
+  geometryGui.add(params, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((value) => {
     rotatingGroup.rotation.y = value * Math.PI / 180;
   });
-  gui.add(params, 'rotUD', -90, 90, 1).name('Rotate Up/Down').onChange((value) => {
+  geometryGui.add(params, 'rotUD', -90, 90, 1).name('Rotate Up/Down').onChange((value) => {
     rotatingGroup.rotation.x = value * Math.PI / 180;
   });
-  gui.domElement.style.visibility = 'hidden';
+  geometryGui.domElement.style.visibility = 'hidden';
 
-  const htmlMesh = new HTMLMesh(gui.domElement);
-  htmlMesh.position.set(0, 1.35, -1);
-  htmlMesh.rotation.x = -55 * Math.PI / 180; // tilt down
-  htmlMesh.scale.setScalar(1.5);
-  guiMesh = htmlMesh;
+  const geometryHtmlMesh = new HTMLMesh(geometryGui.domElement);
+  geometryHtmlMesh.position.set(0.15, 1.5, -0.55);
+  geometryHtmlMesh.rotation.x = -65 * Math.PI / 180; // tilt down
+  geometryHtmlMesh.scale.setScalar(1.);
+  geometryGuiMesh = geometryHtmlMesh;
+
+  // Data GUI
+  const dataGui = new GUI({ width: 280 });
+  dataGui.title('Data Selection');
+  dataGui.add(params, 'threshold', 0, 1, 0.01).name('Isosurface Threshold').onChange((value) => {
+    if (thresholdUniformRef) thresholdUniformRef.value = value;
+  });
+  dataGui.domElement.style.visibility = 'hidden';
+
+  const dataHtmlMesh = new HTMLMesh(dataGui.domElement);
+  dataHtmlMesh.position.set(-0.15, 1.5, -0.55);
+  dataHtmlMesh.rotation.x = -65 * Math.PI / 180; // tilt down
+  dataHtmlMesh.scale.setScalar(1.);
+  dataGuiMesh = dataHtmlMesh;
 
   const group = new InteractiveGroup();
   group.listenToPointerEvents(renderer, camera);
   scene.add(group);
-  group.add(guiMesh);
+  group.add(geometryGuiMesh);
+  group.add(dataGuiMesh);
 }
 
 function setupControllers() {
@@ -158,7 +177,8 @@ function setupControllers() {
 function animate() {
   renderer.setAnimationLoop(() => {
     rotatingGroup.rotation.y += 0.00;
-    if (guiMesh) guiMesh.material.map.update();
+    if (geometryGuiMesh) geometryGuiMesh.material.map.update();
+    if (dataGuiMesh) dataGuiMesh.material.map.update();
     renderer.render(scene, camera);
   });
 }
