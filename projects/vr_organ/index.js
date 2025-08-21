@@ -22,6 +22,15 @@ const params = {
   rotUD: 0,
 };
 
+// Data config object
+const isoThresholds = {
+  eye: 0.20,
+  heart: 0.40,
+  tongue: 0.30,
+  brain: 0.24,
+  kidney: 0.40,
+};
+
 init();
 animate();
 
@@ -176,7 +185,7 @@ function setupControllers() {
 
 function animate() {
   renderer.setAnimationLoop(() => {
-    rotatingGroup.rotation.y += 0.00;
+    rotatingGroup.rotation.y += 0.003;
     if (geometryGuiMesh) geometryGuiMesh.material.map.update();
     if (dataGuiMesh) dataGuiMesh.material.map.update();
     renderer.render(scene, camera);
