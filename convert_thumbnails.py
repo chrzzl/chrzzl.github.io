@@ -5,7 +5,7 @@ from PIL import Image
 TARGET_DIR = "projects"
 TARGET_NAME = "thumbnail.jpg"
 OUTPUT_NAME = "thumbnail.webp"
-MAX_SIZE_KB = 200
+MAX_SIZE_KB = 50
 QUALITY_STEP = 5
 REMOVE_ORIGINAL = False  # Set to True to delete .jpg after conversion
 
