@@ -1,24 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal Page</title>
-    <link rel="stylesheet" href="assets/styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Project Portal</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #000000;
+      color: white;
+      padding: 2rem;
+    }
+
+    h1, p {
+      text-align: center;
+      margin-bottom: 1rem;
+      color: white;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+    }
+
+    .card {
+      background: #1a1a1a;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 20px rgba(255, 255, 255, 0.05);
+      text-align: center;
+      transition: transform 0.2s ease;
+    }
+
+    .card:hover {
+      transform: scale(1.03);
+    }
+
+    .card img {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .card a {
+      display: block;
+      padding: 1rem;
+      font-weight: bold;
+      text-decoration: none;
+      color: white;
+    }
+
+    .card a:hover {
+      color: #00c8ff;
+    }
+  </style>
 </head>
 <body>
-    <h1>Behold, you sexy traveler through cyber space!</h1>
-    <h1>I, sweet sweet webpage, show you some really stuffy stuff!!!11</h1>
-    <p>Select a page to navigate:</p>
-    <ul>
-        <li><a href="projects/earth/index.html">Earth Test</a></li>
-        <li><a href="projects/vr_sandbox/index.html">VR Test</a></li>
-        <li><a href="projects/test/index.html">Hello World</a></li>
-        <li><a href="projects/volumetric_test/index.html">Volumetric Viewer</a></li>
-        <li><a href="projects/volumetric_organs/index.html">Organs</a></li>
-        <li><a href="projects/vr_organ/index.html">Kidney in VR</a></li>
-        <li><a href="projects/vr_cubes/index.html">Cubes in VR</a></li>
+  <h1>🚀 Welcome, you sexy traveler through cyber space!</h1>
+  <p>I, sweet sweet webpage, show you some really stuffy stuff.</h1>
+  <p>Pick a portal below to see mindbending worlds.</p>
 
-    </ul>
+  <div class="grid">
+    <div class="card">
+      <img src="projects/earth/thumbnail.jpg" alt="Earth Test" />
+      <a href="projects/earth/index.html">Earth Test</a>
+    </div>
+    <div class="card">
+      <img src="projects/vr_sandbox/thumbnail.jpg" alt="VR Torus Knot Test" />
+      <a href="projects/vr_sandbox/index.html">VR Torus Knot Test</a>
+    </div>
+    <div class="card">
+      <img src="projects/volumetric_test/thumbnail.jpg" alt="Volumetric Stent Viewer" />
+      <a href="projects/volumetric_test/index.html">Volumetric Stent Viewer</a>
+    </div>
+    <div class="card">
+      <img src="projects/volumetric_organs/thumbnail.jpg" alt="Organs" />
+      <a href="projects/volumetric_organs/index.html">Organs</a>
+    </div>
+    <!-- <div class="card">
+      <img src="projects/vr_organ/thumbnail.jpg" alt="Kidney in VR" />
+      <a href="projects/vr_organ/index.html">Kidney in VR</a>
+    </div> -->
+    <div class="card">
+      <img src="projects/vr_cubes/thumbnail.jpg" alt="Cubes in VR" />
+      <a href="projects/vr_cubes/index.html">Cubes in VR</a>
+    </div>
+  </div>
 </body>
 </html>
