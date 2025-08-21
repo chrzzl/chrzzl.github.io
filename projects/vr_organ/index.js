@@ -3,64 +3,23 @@ import { NRRDLoader } from 'three/addons/loaders/NRRDLoader.js';
 import { VolumeRenderShader1 } from 'three/addons/shaders/VolumeShader.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-import { InteractiveGroup } from 'three/addons/interactive/InteractiveGroup.js';
-
-
-// === CONFIG ===
-const usePerspectiveCamera = true; // ← Toggle this to switch views
-const showWireframe = true;      // ← Toggle this to show/hide wireframe
 
 let scene, camera, renderer, rotatingGroup;
 
+// === CONFIG ===
+// const usePerspectiveCamera = true; // ← Toggle this to switch views
+const showWireframe = false;      // ← Toggle this to show/hide wireframe
+
+
+// Standard XR starting pose
+const vrPosition = new THREE.Vector3(0, 1.7, 0);
+const vrDirection = new THREE.Vector3(0, 0, -1);
+
 init();
-addVolumeBox('data/kidney_256.nrrd', [0, 0, 0], [256, 256, 256]);
+animate();
 
-function init() {
-  scene = new THREE.Scene();
 
-  const aspect = window.innerWidth / window.innerHeight;
-
-  if (usePerspectiveCamera) {
-    const fov = 30;
-    camera = new THREE.PerspectiveCamera(fov, aspect, 1, 2000);
-    camera.position.set(500, 0, 0);
-  } else {
-    const d = 200;
-    camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 2000);
-    camera.position.set(100, 0, 0);
-  }
-
-  const center = new THREE.Vector3(0, 0, 0);
-  const radius = 500;
-
-  // Move camera back along Z axis
-  camera.position.set(128, 128, 128 + radius * 1.5);
-  // camera.lookAt(center);
-  // camera.up.set(0, 0, 1);
-
-  // --- Renderer with XR enabled ---
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setAnimationLoop(animate); // XR-safe loop
-  renderer.xr.enabled = true; // XR support
-  document.body.appendChild(renderer.domElement);
-
-  // Add VR button to enter headset view
-  document.body.appendChild(VRButton.createButton(renderer));
-
-  window.addEventListener('resize', onWindowResize);
-
-  // --- Rotating group ---
-  rotatingGroup = new THREE.Group();
-  scene.add(rotatingGroup);
-
-  const group = new InteractiveGroup();
-  group.listenToPointerEvents( renderer, camera );
-  scene.add( group );
-}
-
-function addVolumeBox(nrrdPath, center, size) {
+function addNrrdVolume(center, size, nrrdPath) {
   const [cx, cy, cz] = center;
   const [sx, sy, sz] = size;
 
@@ -82,7 +41,7 @@ function addVolumeBox(nrrdPath, center, size) {
     uniforms['u_size'].value.set(sx, sy, sz);
     uniforms['u_clim'].value.set(0, 1);
     uniforms['u_renderstyle'].value = 1; // ISO
-    uniforms['u_renderthreshold'].value = 0.4;
+    uniforms['u_renderthreshold'].value = 0.2;
     uniforms['u_cmdata'].value = cmtextures['viridis'];
 
     const geometry = new THREE.BoxGeometry(sx, sy, sz);
@@ -93,7 +52,10 @@ function addVolumeBox(nrrdPath, center, size) {
       fragmentShader: shader.fragmentShader,
       side: THREE.BackSide
     }));
-    mesh.position.set(cx - sx / 2, cy - sy / 2, cz - sz / 2);
+    rotatingGroup.position.set(cx, cy, cz);
+    mesh.position.set(-sx / 2, -sy / 2, -sz / 2); // center relative to group
+    rotatingGroup.add(mesh);
+
 
     const edges = new THREE.EdgesGeometry(geometry);
     const wireframe = new THREE.LineSegments(
@@ -101,30 +63,53 @@ function addVolumeBox(nrrdPath, center, size) {
       new THREE.LineBasicMaterial({ color: 0x00ff00 })
     );
     wireframe.position.copy(mesh.position);
-
-    rotatingGroup.add(mesh);
     if (showWireframe) rotatingGroup.add(wireframe);
   });
 }
 
-function onWindowResize() {
-  const aspect = window.innerWidth / window.innerHeight;
+function init() {
+  scene = new THREE.Scene();
 
-  if (camera.isPerspectiveCamera) {
-    camera.aspect = aspect;
-  } else {
-    const d = 200;
-    camera.left = -d * aspect;
-    camera.right = d * aspect;
-    camera.top = d;
-    camera.bottom = -d;
-  }
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.copy(vrPosition);
+  camera.lookAt(vrPosition.clone().add(vrDirection));
 
-  camera.updateProjectionMatrix();
+  // Lighting
+  const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+  scene.add(light);
+
+  // --- Rotating group ---
+  rotatingGroup = new THREE.Group();
+  scene.add(rotatingGroup);
+
+  // Add NRRD volume
+  const nrrdPath = 'data/eye_256.nrrd';
+  const scale = 1;
+  const nrrdSize = [256*scale, 256*scale, 256*scale];
+  const nrrdDistance = 200*scale;
+  const nrrdOffset = vrDirection.clone().multiplyScalar(nrrdDistance);
+  const center = vrPosition.clone().add(nrrdOffset);
+  addNrrdVolume(center, nrrdSize, nrrdPath);
+
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
+  document.body.appendChild(VRButton.createButton(renderer));
+
+  // Resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
 }
 
 function animate() {
-  rotatingGroup.rotation.z += 0.003;
-  renderer.render(scene, camera);
+  renderer.setAnimationLoop(() => {
+    rotatingGroup.rotation.y += 0.005;
+    renderer.render(scene, camera);
+  });
 }
