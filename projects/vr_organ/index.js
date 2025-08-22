@@ -8,21 +8,21 @@ import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFa
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 let scene, camera, renderer, rotatingGroup;
-let thresholdUniformRef; // keep reference for GUI control
+let thresholdUniformRef;
 let geometryGuiMesh, dataGuiMesh;
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
 
-// GUI config object
+// GUI + data config
 const params = {
+  organ: 'eye',
   threshold: 0.2,
   scale: 1.0,
   rotLR: 0,
   rotUD: 0,
 };
 
-// Data config object
 const isoThresholds = {
   eye: 0.20,
   heart: 0.40,
@@ -39,7 +39,7 @@ function addNrrdVolume(center, size, nrrdPath) {
   const [sx, sy, sz] = size;
 
   const cmtextures = {
-    viridis: new THREE.TextureLoader().load('textures/cm_viridis.png')
+    viridis: new THREE.TextureLoader().load('textures/cm_plasma.png')
   };
 
   new NRRDLoader().load(nrrdPath, (volume) => {
@@ -55,11 +55,11 @@ function addNrrdVolume(center, size, nrrdPath) {
     uniforms['u_data'].value = texture;
     uniforms['u_size'].value.set(sx, sy, sz);
     uniforms['u_clim'].value.set(0, 1);
-    uniforms['u_renderstyle'].value = 1; // ISO
-    uniforms['u_renderthreshold'].value = params.threshold; // link to GUI param
+    uniforms['u_renderstyle'].value = 1;
+    uniforms['u_renderthreshold'].value = params.threshold;
     uniforms['u_cmdata'].value = cmtextures['viridis'];
 
-    thresholdUniformRef = uniforms['u_renderthreshold']; // store reference
+    thresholdUniformRef = uniforms['u_renderthreshold'];
 
     const geometry = new THREE.BoxGeometry(sx, sy, sz);
     geometry.translate(sx / 2, sy / 2, sz / 2);
@@ -70,9 +70,13 @@ function addNrrdVolume(center, size, nrrdPath) {
       side: THREE.BackSide
     }));
 
+    // Center the group and place mesh at origin-relative
     rotatingGroup.position.set(cx, cy, cz);
     mesh.position.set(-sx / 2, -sy / 2, -sz / 2);
     rotatingGroup.add(mesh);
+
+    // Save reference to mesh for later removal
+    rotatingGroup.userData.volumeMesh = mesh;
   });
 }
 
@@ -83,20 +87,15 @@ function init() {
   camera.position.copy(vrPosition);
   camera.lookAt(vrPosition.clone().add(vrDirection));
 
-  const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-  scene.add(light);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
 
   rotatingGroup = new THREE.Group();
   scene.add(rotatingGroup);
 
-  const nrrdPath = 'data/eye_256.nrrd';
-  const scale = 1;
-  const nrrdSize = [256 * scale, 256 * scale, 256 * scale];
-  const nrrdDistance = 200 * scale;
-  const nrrdOffset = vrDirection.clone().multiplyScalar(nrrdDistance);
-  const center = vrPosition.clone().add(nrrdOffset);
-  addNrrdVolume(center, nrrdSize, nrrdPath);
+  // Initial load
+  loadCurrentOrganVolume();
 
+  // Renderer + VR Button
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
@@ -118,39 +117,83 @@ function init() {
   setupControllers();
 }
 
+function loadCurrentOrganVolume() {
+  // Remove previous volume if it exists
+  if (rotatingGroup.userData.volumeMesh) {
+    rotatingGroup.remove(rotatingGroup.userData.volumeMesh);
+    rotatingGroup.userData.volumeMesh.geometry.dispose();
+    rotatingGroup.userData.volumeMesh.material.dispose();
+  }
+
+  // Update threshold to default for this organ
+  const organ = params.organ;
+  const threshold = isoThresholds[organ];
+  params.threshold = threshold;
+
+  // Compute position
+  const scale = 1;
+  const size = [256 * scale, 256 * scale, 256 * scale];
+  const distance = 200 * scale;
+  const offset = vrDirection.clone().multiplyScalar(distance);
+  const center = vrPosition.clone().add(offset);
+
+  // Load new volume
+  const nrrdPath = `../../data/${organ}_256.nrrd`;
+  addNrrdVolume(center, size, nrrdPath);
+}
+
 function setupGUI() {
-  // Geometry GUI
+  // Geometry panel
   const geometryGui = new GUI({ width: 280 });
   geometryGui.title('Object Transforms');
-  geometryGui.add(params, 'scale', 0.5, 1.5, 0.01).name('Scale').onChange((value) => {
-    rotatingGroup.scale.set(value, value, value);
+  geometryGui.add(params, 'scale', 0.5, 1.5, 0.01).name('Scale').onChange((v) => {
+    rotatingGroup.scale.set(v, v, v);
   });
-  geometryGui.add(params, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((value) => {
-    rotatingGroup.rotation.y = value * Math.PI / 180;
+  geometryGui.add(params, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
+    rotatingGroup.rotation.y = v * Math.PI / 180;
   });
-  geometryGui.add(params, 'rotUD', -90, 90, 1).name('Rotate Up/Down').onChange((value) => {
-    rotatingGroup.rotation.x = value * Math.PI / 180;
+  geometryGui.add(params, 'rotUD', -90, 90, 1).name('Rotate Up/Down').onChange((v) => {
+    rotatingGroup.rotation.x = v * Math.PI / 180;
   });
   geometryGui.domElement.style.visibility = 'hidden';
 
   const geometryHtmlMesh = new HTMLMesh(geometryGui.domElement);
   geometryHtmlMesh.position.set(0.15, 1.5, -0.55);
-  geometryHtmlMesh.rotation.x = -65 * Math.PI / 180; // tilt down
-  geometryHtmlMesh.scale.setScalar(1.);
+  geometryHtmlMesh.rotation.x = -65 * Math.PI / 180;
+  geometryHtmlMesh.scale.setScalar(1);
   geometryGuiMesh = geometryHtmlMesh;
 
-  // Data GUI
+  // Data panel
   const dataGui = new GUI({ width: 280 });
   dataGui.title('Data Selection');
+
+  // dataGui.add(params, 'organ', Object.keys(isoThresholds)).name('Organ').onChange((organ) => {
+  //   loadCurrentOrganVolume();
+  //   dataGui.__controllers.forEach(ctrl => ctrl.updateDisplay());
+  // });
+  let organList = Object.keys(isoThresholds);
+let currentIndex = organList.indexOf(params.organ);
+
+function switchOrgan(direction) {
+  currentIndex = (currentIndex + direction + organList.length) % organList.length;
+  params.organ = organList[currentIndex];
+  loadCurrentOrganVolume();
+  dataGui.__controllers.forEach(ctrl => ctrl.updateDisplay());
+}
+
+dataGui.add({ prev: () => switchOrgan(-1) }, 'prev').name('← Prev Organ');
+dataGui.add({ next: () => switchOrgan(1) }, 'next').name('Next Organ →');
+
   dataGui.add(params, 'threshold', 0, 1, 0.01).name('Isosurface Threshold').onChange((value) => {
     if (thresholdUniformRef) thresholdUniformRef.value = value;
   });
+
   dataGui.domElement.style.visibility = 'hidden';
 
   const dataHtmlMesh = new HTMLMesh(dataGui.domElement);
   dataHtmlMesh.position.set(-0.15, 1.5, -0.55);
-  dataHtmlMesh.rotation.x = -65 * Math.PI / 180; // tilt down
-  dataHtmlMesh.scale.setScalar(1.);
+  dataHtmlMesh.rotation.x = -65 * Math.PI / 180;
+  dataHtmlMesh.scale.setScalar(1);
   dataGuiMesh = dataHtmlMesh;
 
   const group = new InteractiveGroup();
@@ -172,15 +215,15 @@ function setupControllers() {
   controller2.add(new THREE.Line(geometry));
   scene.add(controller2);
 
-  const controllerModelFactory = new XRControllerModelFactory();
+  const factory = new XRControllerModelFactory();
 
-  const controllerGrip1 = renderer.xr.getControllerGrip(0);
-  controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-  scene.add(controllerGrip1);
+  const grip1 = renderer.xr.getControllerGrip(0);
+  grip1.add(factory.createControllerModel(grip1));
+  scene.add(grip1);
 
-  const controllerGrip2 = renderer.xr.getControllerGrip(1);
-  controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-  scene.add(controllerGrip2);
+  const grip2 = renderer.xr.getControllerGrip(1);
+  grip2.add(factory.createControllerModel(grip2));
+  scene.add(grip2);
 }
 
 function animate() {

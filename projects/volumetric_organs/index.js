@@ -13,7 +13,7 @@ import { VolumeRenderShader1 } from 'three/addons/shaders/VolumeShader.js';
 const ORGAN = 'brain'; // Change this to 'eye', 'heart', 'tongue', 'brain', 'kidney' as needed
 
 // All nrrd files should be 256x256x256
-const file_path = `data/${ORGAN}_256.nrrd`; // Path to the NRRD file
+const file_path = `../../data/${ORGAN}_256.nrrd`; // Path to the NRRD file
 
 const ISO_THRESHOLDS = {
   eye: 0.20,
