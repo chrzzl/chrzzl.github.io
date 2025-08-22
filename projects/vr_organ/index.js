@@ -10,6 +10,9 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 let scene, camera, renderer, rotatingGroup;
 let thresholdUniformRef;
 let geometryGuiMesh, dataGuiMesh;
+let thresholdController;
+let organTitleMesh;
+
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
@@ -92,6 +95,10 @@ function init() {
   rotatingGroup = new THREE.Group();
   scene.add(rotatingGroup);
 
+  organTitleMesh = createTextLabel(params.organ);
+  organTitleMesh.position.set(0, 2.0, -1); // Adjust position as needed
+  scene.add(organTitleMesh);
+
   // Initial load
   loadCurrentOrganVolume();
 
@@ -167,26 +174,37 @@ function setupGUI() {
   const dataGui = new GUI({ width: 280 });
   dataGui.title('Data Selection');
 
-  // dataGui.add(params, 'organ', Object.keys(isoThresholds)).name('Organ').onChange((organ) => {
-  //   loadCurrentOrganVolume();
-  //   dataGui.__controllers.forEach(ctrl => ctrl.updateDisplay());
-  // });
   let organList = Object.keys(isoThresholds);
-let currentIndex = organList.indexOf(params.organ);
+  let currentIndex = organList.indexOf(params.organ);
 
-function switchOrgan(direction) {
-  currentIndex = (currentIndex + direction + organList.length) % organList.length;
-  params.organ = organList[currentIndex];
-  loadCurrentOrganVolume();
-  dataGui.__controllers.forEach(ctrl => ctrl.updateDisplay());
-}
+  function switchOrgan(direction) {
+    currentIndex = (currentIndex + direction + organList.length) % organList.length;
+    params.organ = organList[currentIndex];
 
-dataGui.add({ prev: () => switchOrgan(-1) }, 'prev').name('← Prev Organ');
-dataGui.add({ next: () => switchOrgan(1) }, 'next').name('Next Organ →');
+    // Set default threshold for this organ
+    params.threshold = isoThresholds[params.organ];
 
-  dataGui.add(params, 'threshold', 0, 1, 0.01).name('Isosurface Threshold').onChange((value) => {
-    if (thresholdUniformRef) thresholdUniformRef.value = value;
-  });
+    // Update the slider to match
+    thresholdController.setValue(params.threshold);
+
+    // Load volume AFTER threshold is set
+    loadCurrentOrganVolume();
+
+    // Update organ name label
+    scene.remove(organTitleMesh); // remove old label
+    organTitleMesh = createTextLabel(params.organ);
+    organTitleMesh.position.set(0, 2.0, -1); // keep it in same spot
+    scene.add(organTitleMesh);
+  }
+
+  dataGui.add({ prev: () => switchOrgan(-1) }, 'prev').name('← Prev Organ');
+  dataGui.add({ next: () => switchOrgan(1) }, 'next').name('Next Organ →');
+
+  thresholdController = dataGui.add(params, 'threshold', 0, 1, 0.01)
+    .name('Isosurface Threshold')
+    .onChange((value) => {
+      if (thresholdUniformRef) thresholdUniformRef.value = value;
+    });
 
   dataGui.domElement.style.visibility = 'hidden';
 
@@ -228,9 +246,29 @@ function setupControllers() {
 
 function animate() {
   renderer.setAnimationLoop(() => {
-    rotatingGroup.rotation.y += 0.003;
+    rotatingGroup.rotation.y += 0.00;
     if (geometryGuiMesh) geometryGuiMesh.material.map.update();
     if (dataGuiMesh) dataGuiMesh.material.map.update();
     renderer.render(scene, camera);
   });
+}
+
+function createTextLabel(text) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 128;
+
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 18px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(1.5, 0.4, 1);
+
+  return sprite;
 }
