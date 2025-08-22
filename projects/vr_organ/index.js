@@ -13,6 +13,13 @@ let geometryGuiMesh, dataGuiMesh;
 let thresholdController;
 let organTitleMesh;
 
+// PARAMETERS
+const ROTATIONSPEED = 0.003;
+const FOV = 60;
+const DISTANCE = 312;
+const VOLSIZE = 128;
+const RENDERSTYLE = 0;
+
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
@@ -42,7 +49,10 @@ function addNrrdVolume(center, size, nrrdPath) {
   const [sx, sy, sz] = size;
 
   const cmtextures = {
-    viridis: new THREE.TextureLoader().load('textures/cm_plasma.png')
+    viridis: new THREE.TextureLoader().load('textures/cm_viridis.png'),
+    plasma: new THREE.TextureLoader().load('textures/cm_plasma.png'),
+    inferno: new THREE.TextureLoader().load('textures/cm_inferno.png'),
+    turbo: new THREE.TextureLoader().load('textures/cm_turbo.png'),
   };
 
   new NRRDLoader().load(nrrdPath, (volume) => {
@@ -58,9 +68,9 @@ function addNrrdVolume(center, size, nrrdPath) {
     uniforms['u_data'].value = texture;
     uniforms['u_size'].value.set(sx, sy, sz);
     uniforms['u_clim'].value.set(0, 1);
-    uniforms['u_renderstyle'].value = 1;
+    uniforms['u_renderstyle'].value = RENDERSTYLE;
     uniforms['u_renderthreshold'].value = params.threshold;
-    uniforms['u_cmdata'].value = cmtextures['viridis'];
+    uniforms['u_cmdata'].value = cmtextures['plasma'];
 
     thresholdUniformRef = uniforms['u_renderthreshold'];
 
@@ -86,7 +96,7 @@ function addNrrdVolume(center, size, nrrdPath) {
 function init() {
   scene = new THREE.Scene();
 
-  camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera = new THREE.PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.1, 5000);
   camera.position.copy(vrPosition);
   camera.lookAt(vrPosition.clone().add(vrDirection));
 
@@ -138,14 +148,13 @@ function loadCurrentOrganVolume() {
   params.threshold = threshold;
 
   // Compute position
-  const scale = 1;
-  const size = [256 * scale, 256 * scale, 256 * scale];
-  const distance = 200 * scale;
+  const size = [VOLSIZE, VOLSIZE, VOLSIZE];
+  const distance = DISTANCE;
   const offset = vrDirection.clone().multiplyScalar(distance);
   const center = vrPosition.clone().add(offset);
 
   // Load new volume
-  const nrrdPath = `../../data/${organ}_256.nrrd`;
+  const nrrdPath = `../../data/${organ}_${VOLSIZE}.nrrd`;
   addNrrdVolume(center, size, nrrdPath);
 }
 
@@ -246,7 +255,7 @@ function setupControllers() {
 
 function animate() {
   renderer.setAnimationLoop(() => {
-    rotatingGroup.rotation.y += 0.00;
+    rotatingGroup.rotation.y += ROTATIONSPEED;
     if (geometryGuiMesh) geometryGuiMesh.material.map.update();
     if (dataGuiMesh) dataGuiMesh.material.map.update();
     renderer.render(scene, camera);
