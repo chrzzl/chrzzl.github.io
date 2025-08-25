@@ -19,7 +19,7 @@ const ROTATIONSPEED = 0.00;
 const FOV = 60;
 const DISTANCE = 312;
 const VOLSIZE = 128;
-const HIDEGUI = true;
+const HIDEGUI = false;
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
