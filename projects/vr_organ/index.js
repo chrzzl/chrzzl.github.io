@@ -19,10 +19,11 @@ const ROTATIONSPEED = 0.00;
 const FOV = 60;
 const DISTANCE = 312;
 const VOLSIZE = 128;
-
+const HIDEGUI = false;
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
+
 
 // GUI + data config
 const params = {
@@ -32,7 +33,7 @@ const params = {
   rotLR: 0,
   rotUD: 0,
   colormap: 1,
-  useIsoSurface: 1,
+  useIsoSurface: 0,
 };
 
 const isoThresholds = {
@@ -50,8 +51,60 @@ const cmtextures = {
   1: new THREE.TextureLoader().load('textures/cm_turbo.png'),
 };
 
+// =======================================
+// Init
+// =======================================
+
 init();
 animate();
+
+function init() {
+  // Setup scene
+  scene = new THREE.Scene();
+
+  // Setup camera
+  camera = new THREE.PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.1, 5000);
+  camera.position.copy(vrPosition);
+  camera.lookAt(vrPosition.clone().add(vrDirection));
+
+  // Setup light
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+
+  // Initial load of volumetric organ data
+  rotatingGroup = new THREE.Group();
+  scene.add(rotatingGroup);
+  loadCurrentOrganVolume();
+
+  // Add auxiliary scene objects
+  setupSceneObjects();
+
+  // Add GUI, XR button, title, controllers
+  setupOrganTitle();
+  setupXRButton();
+  setupGUI();
+  setupControllers();
+
+  // On window resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+
+function animate() {
+  renderer.setAnimationLoop(() => {
+    rotatingGroup.rotation.y += ROTATIONSPEED;
+    if (geometryGuiMesh) geometryGuiMesh.material.map.update();
+    if (dataGuiMesh) dataGuiMesh.material.map.update();
+    renderer.render(scene, camera);
+  });
+}
+
+
+// =======================================
+// Volume Loading & Material Setup
+// =======================================
 
 function addNrrdVolume(center, size, nrrdPath) {
   const [cx, cy, cz] = center;
@@ -96,47 +149,6 @@ function addNrrdVolume(center, size, nrrdPath) {
   });
 }
 
-function init() {
-  scene = new THREE.Scene();
-
-  camera = new THREE.PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.1, 5000);
-  camera.position.copy(vrPosition);
-  camera.lookAt(vrPosition.clone().add(vrDirection));
-
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
-
-  rotatingGroup = new THREE.Group();
-  scene.add(rotatingGroup);
-
-  organTitleMesh = createTextLabel(params.organ);
-  organTitleMesh.position.set(0, 2.0, -1); // Adjust position as needed
-  scene.add(organTitleMesh);
-
-  // Initial load
-  loadCurrentOrganVolume();
-
-  // Renderer + VR Button
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.xr.enabled = true;
-  document.body.appendChild(renderer.domElement);
-  const vrButton = VRButton.createButton(renderer);
-  vrButton.style.position = 'absolute';
-  vrButton.style.top = '50px';
-  vrButton.style.height = '50px';
-  vrButton.style.zIndex = '999';
-  document.body.appendChild(vrButton);
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  setupGUI();
-  setupControllers();
-}
-
 function loadCurrentOrganVolume() {
   // Remove previous volume if it exists
   if (rotatingGroup.userData.volumeMesh) {
@@ -160,6 +172,38 @@ function loadCurrentOrganVolume() {
   const nrrdPath = `../../data/${organ}_${VOLSIZE}.nrrd`;
   addNrrdVolume(center, size, nrrdPath);
 }
+
+// =======================================
+// Scene Objects
+// =======================================
+
+function setupSceneObjects() {
+  // Plane grid floor
+  const gridFloor = new THREE.GridHelper(30, 30, 0x444444, 0x888888);
+  gridFloor.scale.x = 0.5;
+  gridFloor.scale.z = 0.5;
+  gridFloor.position.y = -0.5;
+  scene.add(gridFloor);
+
+  // Pedestal cylinder below volume in grey material
+  const pedestal = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.5, 0.5, 1, 32),
+    new THREE.MeshBasicMaterial({ color: 0x888888 })
+  );
+    // Compute position
+  const size = [VOLSIZE, VOLSIZE, VOLSIZE];
+  const distance = DISTANCE;
+  const offset = vrDirection.clone().multiplyScalar(distance);
+  const center = vrPosition.clone().add(offset);
+  pedestal.position.copy(rotatingGroup.position);
+  pedestal.position.z = -4.5;
+  scene.add(pedestal);
+
+};
+
+// =======================================
+// GUI
+// =======================================
 
 function setupGUI() {
   // Geometry panel
@@ -241,7 +285,30 @@ function setupGUI() {
   scene.add(group);
   group.add(geometryGuiMesh);
   group.add(dataGuiMesh);
+
+  if (HIDEGUI) {
+    dataHtmlMesh.visible = false;
+    geometryHtmlMesh.visible = false;
+  } 
 }
+
+// =======================================
+// VR Controls
+// =======================================
+
+// Setup XR Button
+function setupXRButton() {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
+  const vrButton = VRButton.createButton(renderer);
+  vrButton.style.position = 'absolute';
+  vrButton.style.top = '50px';
+  vrButton.style.height = '50px';
+  vrButton.style.zIndex = '999';
+  document.body.appendChild(vrButton);
+};
 
 function setupControllers() {
   const geometry = new THREE.BufferGeometry();
@@ -266,14 +333,9 @@ function setupControllers() {
   scene.add(grip2);
 }
 
-function animate() {
-  renderer.setAnimationLoop(() => {
-    rotatingGroup.rotation.y += ROTATIONSPEED;
-    if (geometryGuiMesh) geometryGuiMesh.material.map.update();
-    if (dataGuiMesh) dataGuiMesh.material.map.update();
-    renderer.render(scene, camera);
-  });
-}
+// =======================================
+// Text Labels
+// =======================================
 
 function createTextLabel(text) {
   const canvas = document.createElement('canvas');
@@ -293,4 +355,10 @@ function createTextLabel(text) {
   sprite.scale.set(1.5, 0.4, 1);
 
   return sprite;
+}
+
+function setupOrganTitle() {
+  organTitleMesh = createTextLabel(params.organ);
+  organTitleMesh.position.set(0, 2.0, -1); // Adjust position as needed
+  scene.add(organTitleMesh);
 }
