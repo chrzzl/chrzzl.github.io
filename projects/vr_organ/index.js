@@ -19,7 +19,7 @@ const ROTATIONSPEED = 0.00;
 const FOV = 60;
 const DISTANCE = 312;
 const VOLSIZE = 128;
-const HIDEGUI = false;
+const HIDEGUI = true;
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
@@ -67,8 +67,8 @@ function init() {
   camera.position.copy(vrPosition);
   camera.lookAt(vrPosition.clone().add(vrDirection));
 
-  // Setup light
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+  // Setup light & environment
+  setupEnvironmentLighting();
 
   // Initial load of volumetric organ data
   rotatingGroup = new THREE.Group();
@@ -179,27 +179,94 @@ function loadCurrentOrganVolume() {
 
 function setupSceneObjects() {
   // Plane grid floor
-  const gridFloor = new THREE.GridHelper(30, 30, 0x444444, 0x888888);
-  gridFloor.scale.x = 0.5;
-  gridFloor.scale.z = 0.5;
-  gridFloor.position.y = -0.5;
-  scene.add(gridFloor);
+  // const gridFloor = new THREE.GridHelper(30, 30, 0x444444, 0x888888);
+  // gridFloor.scale.x = 0.5;
+  // gridFloor.scale.z = 0.5;
+  // gridFloor.position.y = -0.5;
+  // scene.add(gridFloor);
 
-  // Pedestal cylinder below volume in grey material
-  const pedestal = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.5, 0.5, 1, 32),
-    new THREE.MeshBasicMaterial({ color: 0x888888 })
-  );
-    // Compute position
-  const size = [VOLSIZE, VOLSIZE, VOLSIZE];
-  const distance = DISTANCE;
-  const offset = vrDirection.clone().multiplyScalar(distance);
-  const center = vrPosition.clone().add(offset);
-  pedestal.position.copy(rotatingGroup.position);
-  pedestal.position.z = -4.5;
-  scene.add(pedestal);
+  // // Pedestal cylinder below volume in grey material
+  // const pedestal = new THREE.Mesh(
+  //   new THREE.CylinderGeometry(0.5, 0.5, 1, 32),
+  //   new THREE.MeshBasicMaterial({ color: 0x888888 })
+  // );
+  //   // Compute position
+  // const size = [VOLSIZE, VOLSIZE, VOLSIZE];
+  // const distance = DISTANCE;
+  // const offset = vrDirection.clone().multiplyScalar(distance);
+  // const center = vrPosition.clone().add(offset);
+  // pedestal.position.copy(rotatingGroup.position);
+  // pedestal.position.z = -4.5;
+  // scene.add(pedestal);
+
+  addCylindricalFloor(scene, 5, 0.1, 64, 16);
 
 };
+
+function addCylindricalFloor(scene, radius = 5, height = 0.2, radialSegments = 64, gridLines = 16) {
+  // 1. Cylinder floor (grey)
+  const cylinderGeometry = new THREE.CylinderGeometry(radius, radius, height, radialSegments);
+  const cylinderMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+  const metallicMaterial = new THREE.MeshStandardMaterial({
+    color: 0x888888,       // base grey color
+    metalness: 0.6,         // fully metallic
+    roughness: 0.2          // low roughness = shinier
+  });
+  const cylinder = new THREE.Mesh(cylinderGeometry, metallicMaterial);
+  cylinder.position.y = -height / 2; // So top surface lies at y=0
+  scene.add(cylinder);
+
+  // 2. Grid circle on top face (white edges)
+  const circleGeometry = new THREE.CircleGeometry(radius, radialSegments);
+  circleGeometry.rotateX(-Math.PI / 2); // face up
+  const circleEdges = new THREE.EdgesGeometry(circleGeometry);
+  const circleLine = new THREE.LineSegments(
+    circleEdges,
+    new THREE.LineBasicMaterial({ color: 0xffffff })
+  );
+  circleLine.position.y = 0.01; // Slightly above the floor to avoid z-fighting
+  scene.add(circleLine);
+
+  // 3. Radial lines (white)
+  const center = new THREE.Vector3(0, 0.011, 0); // Slightly above for visibility
+  for (let i = 0; i < gridLines; i++) {
+    const angle = (i / gridLines) * Math.PI * 2;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+
+    const points = [center.clone(), new THREE.Vector3(x, center.y, z)];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff }));
+    scene.add(line);
+  }
+}
+
+// =======================================
+// Environment Lighting 
+// =======================================
+function setupEnvironmentLighting() {
+  // Lighting
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+  dirLight.position.set(5, 10, 7.5);
+  scene.add(dirLight);
+
+  // Skybox
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+  const skybox = new THREE.CubeTextureLoader()
+  .setPath('textures/skybox/')
+  .load([
+    'space_rt.png', // +X (right)
+    'space_lf.png', // -X (left)
+    'space_up.png', // +Y (up)
+    'space_dn.png', // -Y (down)
+    'space_ft.png', // +Z (front)
+    'space_bk.png'  // -Z (back)
+  ]);
+  scene.background = skybox;     // ← makes it visible as background
+  scene.environment = skybox;   // ← enables reflections
+
+
+}
 
 // =======================================
 // GUI
