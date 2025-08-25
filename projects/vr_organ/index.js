@@ -9,6 +9,7 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 let scene, camera, renderer, rotatingGroup;
 let thresholdUniformRef;
+let volumeMaterial;
 let geometryGuiMesh, dataGuiMesh;
 let thresholdController;
 let organTitleMesh;
@@ -31,6 +32,7 @@ const params = {
   scale: 1.0,
   rotLR: 0,
   rotUD: 0,
+  colormap: 1,
 };
 
 const isoThresholds = {
@@ -41,19 +43,19 @@ const isoThresholds = {
   kidney: 0.40,
 };
 
+const cmtextures = {
+  4: new THREE.TextureLoader().load('textures/cm_viridis.png'),
+  3: new THREE.TextureLoader().load('textures/cm_plasma.png'),
+  2: new THREE.TextureLoader().load('textures/cm_inferno.png'),
+  1: new THREE.TextureLoader().load('textures/cm_turbo.png'),
+};
+
 init();
 animate();
 
 function addNrrdVolume(center, size, nrrdPath) {
   const [cx, cy, cz] = center;
   const [sx, sy, sz] = size;
-
-  const cmtextures = {
-    viridis: new THREE.TextureLoader().load('textures/cm_viridis.png'),
-    plasma: new THREE.TextureLoader().load('textures/cm_plasma.png'),
-    inferno: new THREE.TextureLoader().load('textures/cm_inferno.png'),
-    turbo: new THREE.TextureLoader().load('textures/cm_turbo.png'),
-  };
 
   new NRRDLoader().load(nrrdPath, (volume) => {
     const texture = new THREE.Data3DTexture(volume.data, volume.xLength, volume.yLength, volume.zLength);
@@ -70,18 +72,19 @@ function addNrrdVolume(center, size, nrrdPath) {
     uniforms['u_clim'].value.set(0, 1);
     uniforms['u_renderstyle'].value = RENDERSTYLE;
     uniforms['u_renderthreshold'].value = params.threshold;
-    uniforms['u_cmdata'].value = cmtextures['plasma'];
+    uniforms['u_cmdata'].value = cmtextures[params.colormap];
 
     thresholdUniformRef = uniforms['u_renderthreshold'];
 
     const geometry = new THREE.BoxGeometry(sx, sy, sz);
     geometry.translate(sx / 2, sy / 2, sz / 2);
-    const mesh = new THREE.Mesh(geometry, new THREE.ShaderMaterial({
+    volumeMaterial = new THREE.ShaderMaterial({
       uniforms,
       vertexShader: shader.vertexShader,
       fragmentShader: shader.fragmentShader,
       side: THREE.BackSide
-    }));
+    });
+    const mesh = new THREE.Mesh(geometry, volumeMaterial);
 
     // Center the group and place mesh at origin-relative
     rotatingGroup.position.set(cx, cy, cz);
@@ -192,8 +195,6 @@ function setupGUI() {
 
     // Set default threshold for this organ
     params.threshold = isoThresholds[params.organ];
-
-    // Update the slider to match
     thresholdController.setValue(params.threshold);
 
     // Load volume AFTER threshold is set
@@ -214,6 +215,11 @@ function setupGUI() {
     .onChange((value) => {
       if (thresholdUniformRef) thresholdUniformRef.value = value;
     });
+  dataGui.add(params, 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
+    if (volumeMaterial && volumeMaterial.uniforms?.u_cmdata) {
+      volumeMaterial.uniforms['u_cmdata'].value = cmtextures[v];
+    }
+  });
 
   dataGui.domElement.style.visibility = 'hidden';
 
