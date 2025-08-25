@@ -15,11 +15,10 @@ let thresholdController;
 let organTitleMesh;
 
 // PARAMETERS
-const ROTATIONSPEED = 0.003;
+const ROTATIONSPEED = 0.00;
 const FOV = 60;
 const DISTANCE = 312;
 const VOLSIZE = 128;
-const RENDERSTYLE = 0;
 
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
@@ -33,6 +32,7 @@ const params = {
   rotLR: 0,
   rotUD: 0,
   colormap: 1,
+  useIsoSurface: 1,
 };
 
 const isoThresholds = {
@@ -70,7 +70,7 @@ function addNrrdVolume(center, size, nrrdPath) {
     uniforms['u_data'].value = texture;
     uniforms['u_size'].value.set(sx, sy, sz);
     uniforms['u_clim'].value.set(0, 1);
-    uniforms['u_renderstyle'].value = RENDERSTYLE;
+    uniforms['u_renderstyle'].value = params.useIsoSurface;
     uniforms['u_renderthreshold'].value = params.threshold;
     uniforms['u_cmdata'].value = cmtextures[params.colormap];
 
@@ -174,6 +174,11 @@ function setupGUI() {
   geometryGui.add(params, 'rotUD', -90, 90, 1).name('Rotate Up/Down').onChange((v) => {
     rotatingGroup.rotation.x = v * Math.PI / 180;
   });
+  geometryGui.add(params, 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
+    if (volumeMaterial && volumeMaterial.uniforms?.u_cmdata) {
+      volumeMaterial.uniforms['u_cmdata'].value = cmtextures[v];
+    }
+  });
   geometryGui.domElement.style.visibility = 'hidden';
 
   const geometryHtmlMesh = new HTMLMesh(geometryGui.domElement);
@@ -209,17 +214,19 @@ function setupGUI() {
 
   dataGui.add({ prev: () => switchOrgan(-1) }, 'prev').name('← Prev Organ');
   dataGui.add({ next: () => switchOrgan(1) }, 'next').name('Next Organ →');
+  dataGui.add(params, 'useIsoSurface', 0, 1, 1)
+    .name('MIP <> Isosurface')
+    .onChange((v) => {
+      if (volumeMaterial && volumeMaterial.uniforms?.u_renderstyle) {
+        volumeMaterial.uniforms['u_renderstyle'].value = v ? 1 : 0;
+      }
+    });
 
   thresholdController = dataGui.add(params, 'threshold', 0, 1, 0.01)
     .name('Isosurface Threshold')
     .onChange((value) => {
       if (thresholdUniformRef) thresholdUniformRef.value = value;
     });
-  dataGui.add(params, 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
-    if (volumeMaterial && volumeMaterial.uniforms?.u_cmdata) {
-      volumeMaterial.uniforms['u_cmdata'].value = cmtextures[v];
-    }
-  });
 
   dataGui.domElement.style.visibility = 'hidden';
 
