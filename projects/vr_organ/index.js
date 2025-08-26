@@ -9,6 +9,8 @@ import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 let scene, camera, renderer;
 let rotatingGroup, rotatingGroup1;
+let rotatingGroups = {};
+let centers = {};
 let thresholdUniformRef;
 let volumeMaterial;
 let geometryGuiMesh, dataGuiMesh;
@@ -25,6 +27,7 @@ const HIDEGUI = false;
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
 
+const organs = ['eye', 'heart', 'tongue', 'brain', 'kidney'];
 
 // GUI + data config
 const params = {
@@ -70,27 +73,36 @@ function init() {
   // Setup light & environment
   setupEnvironmentLighting();
 
-  // Initial load of volumetric organ data
+  // Load volumetric organ data
+  const size = [VOLSIZE, VOLSIZE, VOLSIZE];
+  initializeCenters(DISTANCE);
+  for (let organ of organs) {
+    // Add rotating group to enable transforms
+    rotatingGroups[organ] = new THREE.Group();
+    scene.add(rotatingGroups[organ]);
+    addOrganVolume(centers[organ], size, organ, rotatingGroups[organ]);
+  }
+
+  // TODO: Take care of rotating groups and GUIs
+
   rotatingGroup = new THREE.Group();
   scene.add(rotatingGroup);
   const organ = 'kidney';
   // Compute position
-  const size = [VOLSIZE, VOLSIZE, VOLSIZE];
-  const distance = DISTANCE;
-  const offset = vrDirection.clone().multiplyScalar(distance);
-  const center = vrPosition.clone().add(offset);
-  addOrganVolume(center, size, organ, rotatingGroup);
+  // const offset = vrDirection.clone().multiplyScalar(distance);
+  // const center = vrPosition.clone().add(offset);
+  // addOrganVolume(center, size, organ, rotatingGroup);
 
   rotatingGroup1 = new THREE.Group();
   scene.add(rotatingGroup1);
   const organ1 = 'eye';
   // Compute position
-  const size1 = [VOLSIZE, VOLSIZE, VOLSIZE];
-  const distance1 = DISTANCE;
-  const offset1 = vrDirection.clone().multiplyScalar(distance);
-  const center1 = vrPosition.clone().add(offset);
-  center1.x += VOLSIZE * 0.8;
-  addOrganVolume(center1, size1, organ1,rotatingGroup1);
+  // const size1 = [VOLSIZE, VOLSIZE, VOLSIZE];
+  // const distance1 = DISTANCE;
+  // const offset1 = vrDirection.clone().multiplyScalar(distance);
+  // const center1 = vrPosition.clone().add(offset);
+  // center1.x += VOLSIZE * 0.8;
+  // addOrganVolume(center1, size1, organ1, rotatingGroup1);
 
   // Add auxiliary scene objects
   setupSceneObjects();
@@ -166,12 +178,23 @@ function addOrganVolume(center, size, organ, rotateGroup) {
     rotateGroup.position.set(cx, cy, cz);
     mesh.position.set(-sx / 2, -sy / 2, -sz / 2);
     rotateGroup.add(mesh);
+    rotateGroup.lookAt(vrPosition);
   });
 }
 
 // =======================================
 // Scene Objects
 // =======================================
+
+function initializeCenters(distance) {
+  for (let organ of organs) {
+    const center = new THREE.Vector3(0, 1.7, 0);
+    const angle = (organs.indexOf(organ) / organs.length) * Math.PI * 2;
+    center.x += Math.sin(angle) * distance;
+    center.z -= Math.cos(angle) * distance;
+    centers[organ] = center;
+  }
+}
 
 function setupSceneObjects() {
   // Add floor
