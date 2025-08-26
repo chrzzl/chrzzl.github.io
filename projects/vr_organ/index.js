@@ -95,7 +95,7 @@ function init() {
 
   rotatingGroup1 = new THREE.Group();
   scene.add(rotatingGroup1);
-  const organ1 = 'eye';
+  // const organ1 = 'eye';
   // Compute position
   // const size1 = [VOLSIZE, VOLSIZE, VOLSIZE];
   // const distance1 = DISTANCE;
@@ -108,7 +108,7 @@ function init() {
   setupSceneObjects();
 
   // Add GUI, XR button, title, controllers
-  setupOrganTitle(organ);
+  setupOrganTitles();
   setupXRButton();
   setupGUI();
   setupControllers();
@@ -123,8 +123,10 @@ function init() {
 
 function animate() {
   renderer.setAnimationLoop(() => {
-    rotatingGroup.rotation.y += ROTATIONSPEED;
-    rotatingGroup1.rotation.y += ROTATIONSPEED;
+    // Rotate the volumes
+    for (let organ of organs) {
+      rotatingGroups[organ].rotation.y += ROTATIONSPEED;
+    }
     if (geometryGuiMesh) geometryGuiMesh.material.map.update();
     if (dataGuiMesh) dataGuiMesh.material.map.update();
     renderer.render(scene, camera);
@@ -135,6 +137,16 @@ function animate() {
 // =======================================
 // Volume Loading & Material Setup
 // =======================================
+
+function initializeCenters(distance) {
+  for (let organ of organs) {
+    const center = new THREE.Vector3(0, 1.7, 0);
+    const angle = (organs.indexOf(organ) / organs.length) * Math.PI * 2;
+    center.x += Math.sin(angle) * distance;
+    center.z -= Math.cos(angle) * distance;
+    centers[organ] = center;
+  }
+}
 
 function addOrganVolume(center, size, organ, rotateGroup) {
   const nrrdPath = `../../data/${organ}_${VOLSIZE}.nrrd`;
@@ -186,29 +198,8 @@ function addOrganVolume(center, size, organ, rotateGroup) {
 // Scene Objects
 // =======================================
 
-function initializeCenters(distance) {
-  for (let organ of organs) {
-    const center = new THREE.Vector3(0, 1.7, 0);
-    const angle = (organs.indexOf(organ) / organs.length) * Math.PI * 2;
-    center.x += Math.sin(angle) * distance;
-    center.z -= Math.cos(angle) * distance;
-    centers[organ] = center;
-  }
-}
-
 function setupSceneObjects() {
-  // Add floor
   addCylindricalFloor(scene, 5, 0.1, 64, 16);
-
-  // generateCubes([VOLSIZE*0.5, VOLSIZE*0.5, VOLSIZE*0.5], 5, DISTANCE*0.5, scene);
-  const path = `../../data/tongue_${VOLSIZE}.nrrd`
-  const size2 = [VOLSIZE, VOLSIZE, VOLSIZE];
-  const distance = DISTANCE;
-  const offset = vrDirection.clone().multiplyScalar(distance);
-  const center2 = vrPosition.clone().add(offset);
-  center2.x += VOLSIZE * 0.5;
-  //addNrrdVolume(center2, size2, path);
-
 };
 
 function addCylindricalFloor(scene, radius = 5, height = 0.2, radialSegments = 64, gridLines = 16) {
@@ -246,30 +237,6 @@ function addCylindricalFloor(scene, radius = 5, height = 0.2, radialSegments = 6
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff }));
     scene.add(line);
-  }
-}
-
-function generateCubes(size, N, D, scene) {
-  const [w, h, d] = size;
-  const redMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-
-  for (let i = 0; i < N; i++) {
-    const angle = (i / N) * Math.PI * 2; // Distribute evenly over circle
-
-    // Position on circle
-    const x = D * Math.cos(angle);
-    const z = D * Math.sin(angle);
-    const y = 0; // flat circle on XZ plane
-
-    // Create cube
-    const geometry = new THREE.BoxGeometry(w, h, d);
-    const cube = new THREE.Mesh(geometry, redMat);
-    cube.position.set(x, y, z);
-
-    // Make front face point toward origin
-    cube.lookAt(0, y, 0); // Rotate so Z+ points toward origin
-
-    scene.add(cube);
   }
 }
 
@@ -440,4 +407,17 @@ function setupOrganTitle(organ) {
   organTitleMesh = createTextLabel(organ);
   organTitleMesh.position.set(0, 2.0, -1); // Adjust position as needed
   scene.add(organTitleMesh);
+}
+
+function setupOrganTitles() {
+  for (let organ of organs) {
+    organTitleMesh = createTextLabel(organ);
+    const angle = (organs.indexOf(organ) / organs.length) * Math.PI * 2;
+    const position = new THREE.Vector3(0, 2.0, 0);
+    position.x += Math.sin(angle);
+    position.z -= Math.cos(angle);
+    organTitleMesh.position.copy(position);
+    organTitleMesh.lookAt(vrPosition);
+    scene.add(organTitleMesh);
+  }
 }
