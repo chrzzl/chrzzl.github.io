@@ -7,8 +7,7 @@ import { InteractiveGroup } from 'three/addons/interactive/InteractiveGroup.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
-let scene, camera, renderer;
-let rotatingGroup, rotatingGroup1;
+let scene, camera, renderer, rotatingGroup;
 let thresholdUniformRef;
 let volumeMaterial;
 let geometryGuiMesh, dataGuiMesh;
@@ -16,7 +15,7 @@ let thresholdController;
 let organTitleMesh;
 
 // PARAMETERS
-const ROTATIONSPEED = 0.003;
+const ROTATIONSPEED = 0.00;
 const FOV = 60;
 const DISTANCE = 312;
 const VOLSIZE = 128;
@@ -28,6 +27,7 @@ const vrDirection = new THREE.Vector3(0, 0, -1);
 
 // GUI + data config
 const params = {
+  organ: 'eye',
   threshold: 0.2,
   scale: 1.0,
   rotLR: 0,
@@ -73,30 +73,13 @@ function init() {
   // Initial load of volumetric organ data
   rotatingGroup = new THREE.Group();
   scene.add(rotatingGroup);
-  const organ = 'kidney';
-  // Compute position
-  const size = [VOLSIZE, VOLSIZE, VOLSIZE];
-  const distance = DISTANCE;
-  const offset = vrDirection.clone().multiplyScalar(distance);
-  const center = vrPosition.clone().add(offset);
-  addOrganVolume(center, size, organ, rotatingGroup);
-
-  rotatingGroup1 = new THREE.Group();
-  scene.add(rotatingGroup1);
-  const organ1 = 'eye';
-  // Compute position
-  const size1 = [VOLSIZE, VOLSIZE, VOLSIZE];
-  const distance1 = DISTANCE;
-  const offset1 = vrDirection.clone().multiplyScalar(distance);
-  const center1 = vrPosition.clone().add(offset);
-  center1.x += VOLSIZE * 0.8;
-  addOrganVolume(center1, size1, organ1,rotatingGroup1);
+  loadCurrentOrganVolume();
 
   // Add auxiliary scene objects
   setupSceneObjects();
 
   // Add GUI, XR button, title, controllers
-  setupOrganTitle(organ);
+  setupOrganTitle();
   setupXRButton();
   setupGUI();
   setupControllers();
@@ -112,7 +95,6 @@ function init() {
 function animate() {
   renderer.setAnimationLoop(() => {
     rotatingGroup.rotation.y += ROTATIONSPEED;
-    rotatingGroup1.rotation.y += ROTATIONSPEED;
     if (geometryGuiMesh) geometryGuiMesh.material.map.update();
     if (dataGuiMesh) dataGuiMesh.material.map.update();
     renderer.render(scene, camera);
@@ -124,10 +106,7 @@ function animate() {
 // Volume Loading & Material Setup
 // =======================================
 
-function addOrganVolume(center, size, organ, rotateGroup) {
-  const nrrdPath = `../../data/${organ}_${VOLSIZE}.nrrd`;
-  const threshold = isoThresholds[organ];
-  params.threshold = threshold;
+function addNrrdVolume(center, size, nrrdPath) {
   const [cx, cy, cz] = center;
   const [sx, sy, sz] = size;
 
@@ -158,15 +137,40 @@ function addOrganVolume(center, size, organ, rotateGroup) {
       fragmentShader: shader.fragmentShader,
       side: THREE.BackSide
     });
-    // const dummyMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
-    // const mesh = new THREE.Mesh(geometry, dummyMaterial);
     const mesh = new THREE.Mesh(geometry, volumeMaterial);
 
     // Center the group and place mesh at origin-relative
-    rotateGroup.position.set(cx, cy, cz);
+    rotatingGroup.position.set(cx, cy, cz);
     mesh.position.set(-sx / 2, -sy / 2, -sz / 2);
-    rotateGroup.add(mesh);
+    rotatingGroup.add(mesh);
+
+    // Save reference to mesh for later removal
+    rotatingGroup.userData.volumeMesh = mesh;
   });
+}
+
+function loadCurrentOrganVolume() {
+  // Remove previous volume if it exists
+  if (rotatingGroup.userData.volumeMesh) {
+    rotatingGroup.remove(rotatingGroup.userData.volumeMesh);
+    rotatingGroup.userData.volumeMesh.geometry.dispose();
+    rotatingGroup.userData.volumeMesh.material.dispose();
+  }
+
+  // Update threshold to default for this organ
+  const organ = params.organ;
+  const threshold = isoThresholds[organ];
+  params.threshold = threshold;
+
+  // Compute position
+  const size = [VOLSIZE, VOLSIZE, VOLSIZE];
+  const distance = DISTANCE;
+  const offset = vrDirection.clone().multiplyScalar(distance);
+  const center = vrPosition.clone().add(offset);
+
+  // Load new volume
+  const nrrdPath = `../../data/${organ}_${VOLSIZE}.nrrd`;
+  addNrrdVolume(center, size, nrrdPath);
 }
 
 // =======================================
@@ -174,17 +178,28 @@ function addOrganVolume(center, size, organ, rotateGroup) {
 // =======================================
 
 function setupSceneObjects() {
-  // Add floor
-  addCylindricalFloor(scene, 5, 0.1, 64, 16);
+  // Plane grid floor
+  // const gridFloor = new THREE.GridHelper(30, 30, 0x444444, 0x888888);
+  // gridFloor.scale.x = 0.5;
+  // gridFloor.scale.z = 0.5;
+  // gridFloor.position.y = -0.5;
+  // scene.add(gridFloor);
 
-  // generateCubes([VOLSIZE*0.5, VOLSIZE*0.5, VOLSIZE*0.5], 5, DISTANCE*0.5, scene);
-  const path = `../../data/tongue_${VOLSIZE}.nrrd`
-  const size2 = [VOLSIZE, VOLSIZE, VOLSIZE];
-  const distance = DISTANCE;
-  const offset = vrDirection.clone().multiplyScalar(distance);
-  const center2 = vrPosition.clone().add(offset);
-  center2.x += VOLSIZE * 0.5;
-  //addNrrdVolume(center2, size2, path);
+  // // Pedestal cylinder below volume in grey material
+  // const pedestal = new THREE.Mesh(
+  //   new THREE.CylinderGeometry(0.5, 0.5, 1, 32),
+  //   new THREE.MeshBasicMaterial({ color: 0x888888 })
+  // );
+  //   // Compute position
+  // const size = [VOLSIZE, VOLSIZE, VOLSIZE];
+  // const distance = DISTANCE;
+  // const offset = vrDirection.clone().multiplyScalar(distance);
+  // const center = vrPosition.clone().add(offset);
+  // pedestal.position.copy(rotatingGroup.position);
+  // pedestal.position.z = -4.5;
+  // scene.add(pedestal);
+
+  addCylindricalFloor(scene, 5, 0.1, 64, 16);
 
 };
 
@@ -225,31 +240,6 @@ function addCylindricalFloor(scene, radius = 5, height = 0.2, radialSegments = 6
     scene.add(line);
   }
 }
-
-function generateCubes(size, N, D, scene) {
-  const [w, h, d] = size;
-  const redMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-
-  for (let i = 0; i < N; i++) {
-    const angle = (i / N) * Math.PI * 2; // Distribute evenly over circle
-
-    // Position on circle
-    const x = D * Math.cos(angle);
-    const z = D * Math.sin(angle);
-    const y = 0; // flat circle on XZ plane
-
-    // Create cube
-    const geometry = new THREE.BoxGeometry(w, h, d);
-    const cube = new THREE.Mesh(geometry, redMat);
-    cube.position.set(x, y, z);
-
-    // Make front face point toward origin
-    cube.lookAt(0, y, 0); // Rotate so Z+ points toward origin
-
-    scene.add(cube);
-  }
-}
-
 
 // =======================================
 // Environment Lighting 
@@ -312,10 +302,30 @@ function setupGUI() {
   const dataGui = new GUI({ width: 280 });
   dataGui.title('Data Selection');
 
-  // let organList = Object.keys(isoThresholds);
-  // let currentIndex = organList.indexOf(params.organ);
+  let organList = Object.keys(isoThresholds);
+  let currentIndex = organList.indexOf(params.organ);
 
- dataGui.add(params, 'useIsoSurface', 0, 1, 1)
+  function switchOrgan(direction) {
+    currentIndex = (currentIndex + direction + organList.length) % organList.length;
+    params.organ = organList[currentIndex];
+
+    // Set default threshold for this organ
+    params.threshold = isoThresholds[params.organ];
+    thresholdController.setValue(params.threshold);
+
+    // Load volume AFTER threshold is set
+    loadCurrentOrganVolume();
+
+    // Update organ name label
+    scene.remove(organTitleMesh); // remove old label
+    organTitleMesh = createTextLabel(params.organ);
+    organTitleMesh.position.set(0, 2.0, -1); // keep it in same spot
+    scene.add(organTitleMesh);
+  }
+
+  dataGui.add({ prev: () => switchOrgan(-1) }, 'prev').name('← Prev Organ');
+  dataGui.add({ next: () => switchOrgan(1) }, 'next').name('Next Organ →');
+  dataGui.add(params, 'useIsoSurface', 0, 1, 1)
     .name('MIP <> Isosurface')
     .onChange((v) => {
       if (volumeMaterial && volumeMaterial.uniforms?.u_renderstyle) {
@@ -410,11 +420,12 @@ function createTextLabel(text) {
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
   const sprite = new THREE.Sprite(material);
   sprite.scale.set(1.5, 0.4, 1);
+
   return sprite;
 }
 
-function setupOrganTitle(organ) {
-  organTitleMesh = createTextLabel(organ);
+function setupOrganTitle() {
+  organTitleMesh = createTextLabel(params.organ);
   organTitleMesh.position.set(0, 2.0, -1); // Adjust position as needed
   scene.add(organTitleMesh);
 }
