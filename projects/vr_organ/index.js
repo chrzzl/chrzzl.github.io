@@ -110,6 +110,9 @@ function init() {
   // Add GUI
   setupOrganTitles();
   setupOrganGUIs();
+
+  // Add credits
+  setupCredits(renderer);
   
   // On window resize
   window.addEventListener('resize', () => {
@@ -426,3 +429,34 @@ function setupOrganTitles() {
     scene.add(organTitleMesh);
   }
 }
+
+// =======================================
+// Credit watermark
+// =======================================
+
+function setupCredits(renderer) {
+  const creditsDiv = document.createElement('div');
+  creditsDiv.id = 'credits';
+  creditsDiv.innerHTML = 'Author: Christoph Karg <br>Data: Dechend Lab';
+  creditsDiv.style.position = 'absolute';
+  creditsDiv.style.top = '10px';
+  creditsDiv.style.right = '10px';
+  creditsDiv.style.fontSize = '12px';
+  creditsDiv.style.color = '#888';
+  creditsDiv.style.fontFamily = 'sans-serif';
+  creditsDiv.style.background = 'rgba(255, 255, 255, 0.2)';
+  creditsDiv.style.padding = '5px 8px';
+  creditsDiv.style.borderRadius = '5px';
+  creditsDiv.style.zIndex = '999';
+  document.body.appendChild(creditsDiv);
+
+  // XR session change detection
+  renderer.xr.addEventListener('sessionstart', () => {
+    creditsDiv.style.display = 'none';
+  });
+
+  renderer.xr.addEventListener('sessionend', () => {
+    creditsDiv.style.display = 'block';
+  });
+}
+
