@@ -12,13 +12,17 @@ let rotatingGroup, rotatingGroup1;
 let rotatingGroups = {};
 let centers = {};
 let thresholdUniformRef;
+let thresholdUniformRefs = {};
 let volumeMaterial;
+let volumeMaterials = {};
 let geometryGuiMesh, dataGuiMesh;
+let organTransformsGuiMeshes = {};
+let organDataGuiMeshes = {};
 let thresholdController;
 let organTitleMesh;
 
 // PARAMETERS
-const ROTATIONSPEED = 0.003;
+const ROTATIONSPEED = 0.00;
 const FOV = 60;
 const DISTANCE = 312;
 const VOLSIZE = 128;
@@ -45,6 +49,26 @@ const isoThresholds = {
   tongue: 0.30,
   brain: 0.24,
   kidney: 0.40,
+};
+
+const organParams = {};
+for (let organ of organs) {
+  organParams[organ] = {
+    threshold: isoThresholds[organ],
+    scale: 1.0,
+    rotLR: 0,
+    rotUD: 0,
+    colormap: 1,
+    useIsoSurface: 0,
+  };
+}
+
+const organTitles = {
+  eye: 'Eye',
+  heart: 'Heart',
+  tongue: 'Tongue',
+  brain: 'Brain',
+  kidney: 'Kidney', 
 };
 
 const cmtextures = {
@@ -110,7 +134,8 @@ function init() {
   // Add GUI, XR button, title, controllers
   setupOrganTitles();
   setupXRButton();
-  setupGUI();
+  setupOrganGUIs();
+  //setupGUI();
   setupControllers();
 
   // On window resize
@@ -129,6 +154,10 @@ function animate() {
     }
     if (geometryGuiMesh) geometryGuiMesh.material.map.update();
     if (dataGuiMesh) dataGuiMesh.material.map.update();
+    for (let organ of organs) {
+      if (organTransformsGuiMeshes[organ]) organTransformsGuiMeshes[organ].material.map.update();
+      if (organDataGuiMeshes[organ]) organDataGuiMeshes[organ].material.map.update();
+    }
     renderer.render(scene, camera);
   });
 }
@@ -172,11 +201,11 @@ function addOrganVolume(center, size, organ, rotateGroup) {
     uniforms['u_renderthreshold'].value = params.threshold;
     uniforms['u_cmdata'].value = cmtextures[params.colormap];
 
-    thresholdUniformRef = uniforms['u_renderthreshold'];
+    thresholdUniformRefs[organ] = uniforms['u_renderthreshold'];
 
     const geometry = new THREE.BoxGeometry(sx, sy, sz);
     geometry.translate(sx / 2, sy / 2, sz / 2);
-    volumeMaterial = new THREE.ShaderMaterial({
+    volumeMaterials[organ] = new THREE.ShaderMaterial({
       uniforms,
       vertexShader: shader.vertexShader,
       fragmentShader: shader.fragmentShader,
@@ -184,7 +213,7 @@ function addOrganVolume(center, size, organ, rotateGroup) {
     });
     // const dummyMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
     // const mesh = new THREE.Mesh(geometry, dummyMaterial);
-    const mesh = new THREE.Mesh(geometry, volumeMaterial);
+    const mesh = new THREE.Mesh(geometry, volumeMaterials[organ]);
 
     // Center the group and place mesh at origin-relative
     rotateGroup.position.set(cx, cy, cz);
@@ -272,6 +301,80 @@ function setupEnvironmentLighting() {
 // GUI
 // =======================================
 
+function setupOrganGUIs() {
+  const angleOffset = 0.04 * Math.PI * 2;
+  const guiDistance = 0.5;
+  const guiScale = 0.9;
+
+  const group = new InteractiveGroup();
+  group.listenToPointerEvents(renderer, camera);
+  scene.add(group);
+  for (let organ of organs) {
+    // Transforms panel
+    const transformsGui = new GUI({ width: 250 });
+    transformsGui.title(`${organTitles[organ]} - Transforms`);
+    transformsGui.add(organParams[organ], 'scale', 0.5, 1.5, 0.01).name('Scale').onChange((v) => {
+      rotatingGroups[organ].scale.set(v, v, v);
+    });
+    transformsGui.add(organParams[organ], 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
+      rotatingGroups[organ].rotation.y = v * Math.PI / 180;
+    });
+    transformsGui.add(organParams[organ], 'rotUD', -90, 90, 1).name('Rotate Up/Down').onChange((v) => {
+      rotatingGroups[organ].rotation.x = v * Math.PI / 180;
+    });
+    transformsGui.domElement.style.visibility = 'hidden';
+
+    organTransformsGuiMeshes[organ] = new HTMLMesh(transformsGui.domElement);
+    const angle = (organs.indexOf(organ) / organs.length) * Math.PI * 2;
+    const position = new THREE.Vector3(0, 1.5, 0);
+    position.x += Math.sin(angle + angleOffset) * guiDistance;
+    position.z -= Math.cos(angle + angleOffset) * guiDistance;
+    organTransformsGuiMeshes[organ].position.copy(position);
+    organTransformsGuiMeshes[organ].lookAt(vrPosition);
+    organTransformsGuiMeshes[organ].scale.setScalar(guiScale);
+
+    // Data panel
+    const dataGui = new GUI({ width: 250 });
+    dataGui.title(`${organTitles[organ]} - Visualization`);
+
+    dataGui.add(organParams[organ], 'useIsoSurface', 0, 1, 1)
+      .name('MIP <> Isosurface')
+      .onChange((v) => {
+        if (volumeMaterials[organ] && volumeMaterials[organ].uniforms?.u_renderstyle) {
+          volumeMaterials[organ].uniforms['u_renderstyle'].value = v ? 1 : 0;
+        }
+      });
+    dataGui.add(organParams[organ], 'threshold', 0, 1, 0.01)
+      .name('Isosurf. Threshold')
+      .onChange((value) => {
+        if (thresholdUniformRefs[organ]) thresholdUniformRefs[organ].value = value;
+      });
+    dataGui.add(organParams[organ], 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
+      if (volumeMaterials[organ] && volumeMaterials[organ].uniforms?.u_cmdata) {
+        volumeMaterials[organ].uniforms['u_cmdata'].value = cmtextures[v];
+      }
+    });
+    dataGui.domElement.style.visibility = 'hidden';
+
+    organDataGuiMeshes[organ] = new HTMLMesh(dataGui.domElement);
+    const position2 = new THREE.Vector3(0, 1.5, 0);
+    position2.x += Math.sin(angle - angleOffset) * guiDistance;
+    position2.z -= Math.cos(angle - angleOffset) * guiDistance;
+    organDataGuiMeshes[organ].position.copy(position2);
+    organDataGuiMeshes[organ].lookAt(vrPosition);
+    organDataGuiMeshes[organ].scale.setScalar(guiScale); 
+
+    // Add to interactive group
+    group.add(organTransformsGuiMeshes[organ]);
+    group.add(organDataGuiMeshes[organ]);
+
+    if (HIDEGUI) {
+      organTransformsGuiMeshes[organ].visible = false;
+      organDataGuiMeshes[organ].visible = false;
+    }
+  }
+}
+
 function setupGUI() {
   // Geometry panel
   const geometryGui = new GUI({ width: 280 });
@@ -285,16 +388,11 @@ function setupGUI() {
   geometryGui.add(params, 'rotUD', -90, 90, 1).name('Rotate Up/Down').onChange((v) => {
     rotatingGroup.rotation.x = v * Math.PI / 180;
   });
-  geometryGui.add(params, 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
-    if (volumeMaterial && volumeMaterial.uniforms?.u_cmdata) {
-      volumeMaterial.uniforms['u_cmdata'].value = cmtextures[v];
-    }
-  });
   geometryGui.domElement.style.visibility = 'hidden';
 
   const geometryHtmlMesh = new HTMLMesh(geometryGui.domElement);
   geometryHtmlMesh.position.set(0.15, 1.5, -0.55);
-  geometryHtmlMesh.rotation.x = -65 * Math.PI / 180;
+  geometryHtmlMesh.lookAt(vrPosition);
   geometryHtmlMesh.scale.setScalar(1);
   geometryGuiMesh = geometryHtmlMesh;
 
@@ -318,20 +416,29 @@ function setupGUI() {
     .onChange((value) => {
       if (thresholdUniformRef) thresholdUniformRef.value = value;
     });
-
+  dataGui.add(params, 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
+    if (volumeMaterial && volumeMaterial.uniforms?.u_cmdata) {
+      volumeMaterial.uniforms['u_cmdata'].value = cmtextures[v];
+    }
+  });
   dataGui.domElement.style.visibility = 'hidden';
 
   const dataHtmlMesh = new HTMLMesh(dataGui.domElement);
   dataHtmlMesh.position.set(-0.15, 1.5, -0.55);
-  dataHtmlMesh.rotation.x = -65 * Math.PI / 180;
+  dataHtmlMesh.lookAt(vrPosition);
   dataHtmlMesh.scale.setScalar(1);
   dataGuiMesh = dataHtmlMesh;
 
+  // Add to scene and make interactive
   const group = new InteractiveGroup();
   group.listenToPointerEvents(renderer, camera);
   scene.add(group);
   group.add(geometryGuiMesh);
   group.add(dataGuiMesh);
+  for (let organ of organs) {
+    group.add(organTransformsGuiMeshes[organ]);
+    group.add(organDataGuiMeshes[organ]);
+  }
 
   if (HIDEGUI) {
     dataHtmlMesh.visible = false;
@@ -384,7 +491,8 @@ function setupControllers() {
 // Text Labels
 // =======================================
 
-function createTextLabel(text) {
+function createTextLabel(organ) {
+  const text = organTitles[organ];
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 128;
