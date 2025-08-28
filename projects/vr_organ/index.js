@@ -8,17 +8,11 @@ import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFa
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 let scene, camera, renderer;
-let rotatingGroup, rotatingGroup1;
 let rotatingGroups = {};
 let centers = {};
-let thresholdUniformRef;
 let thresholdUniformRefs = {};
-let volumeMaterial;
 let volumeMaterials = {};
-let geometryGuiMesh, dataGuiMesh;
-let organTransformsGuiMeshes = {};
-let organDataGuiMeshes = {};
-let thresholdController;
+let organTransformsGuiMeshes = {}, organDataGuiMeshes = {};
 let organTitleMesh;
 
 // PARAMETERS
@@ -98,46 +92,25 @@ function init() {
   setupEnvironmentLighting();
 
   // Load volumetric organ data
-  const size = [VOLSIZE, VOLSIZE, VOLSIZE];
+  const volumeSize = [VOLSIZE, VOLSIZE, VOLSIZE];
   initializeCenters(DISTANCE);
   for (let organ of organs) {
-    // Add rotating group to enable transforms
-    rotatingGroups[organ] = new THREE.Group();
+    rotatingGroups[organ] = new THREE.Group(); // Add rotating group to enable transforms
     scene.add(rotatingGroups[organ]);
-    addOrganVolume(centers[organ], size, organ, rotatingGroups[organ]);
+    addOrganVolume(centers[organ], volumeSize, organ, rotatingGroups[organ]);
   }
-
-  // TODO: Take care of rotating groups and GUIs
-
-  rotatingGroup = new THREE.Group();
-  scene.add(rotatingGroup);
-  const organ = 'kidney';
-  // Compute position
-  // const offset = vrDirection.clone().multiplyScalar(distance);
-  // const center = vrPosition.clone().add(offset);
-  // addOrganVolume(center, size, organ, rotatingGroup);
-
-  rotatingGroup1 = new THREE.Group();
-  scene.add(rotatingGroup1);
-  // const organ1 = 'eye';
-  // Compute position
-  // const size1 = [VOLSIZE, VOLSIZE, VOLSIZE];
-  // const distance1 = DISTANCE;
-  // const offset1 = vrDirection.clone().multiplyScalar(distance);
-  // const center1 = vrPosition.clone().add(offset);
-  // center1.x += VOLSIZE * 0.8;
-  // addOrganVolume(center1, size1, organ1, rotatingGroup1);
 
   // Add auxiliary scene objects
   setupSceneObjects();
 
-  // Add GUI, XR button, title, controllers
-  setupOrganTitles();
+  // Add XR button and XR controllers
   setupXRButton();
-  setupOrganGUIs();
-  //setupGUI();
   setupControllers();
 
+  // Add GUI
+  setupOrganTitles();
+  setupOrganGUIs();
+  
   // On window resize
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -148,13 +121,10 @@ function init() {
 
 function animate() {
   renderer.setAnimationLoop(() => {
-    // Rotate the volumes
     for (let organ of organs) {
+      // Rotate the volumes
       rotatingGroups[organ].rotation.y += ROTATIONSPEED;
-    }
-    if (geometryGuiMesh) geometryGuiMesh.material.map.update();
-    if (dataGuiMesh) dataGuiMesh.material.map.update();
-    for (let organ of organs) {
+      // Update the GUIs
       if (organTransformsGuiMeshes[organ]) organTransformsGuiMeshes[organ].material.map.update();
       if (organDataGuiMeshes[organ]) organDataGuiMeshes[organ].material.map.update();
     }
@@ -211,8 +181,6 @@ function addOrganVolume(center, size, organ, rotateGroup) {
       fragmentShader: shader.fragmentShader,
       side: THREE.BackSide
     });
-    // const dummyMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
-    // const mesh = new THREE.Mesh(geometry, dummyMaterial);
     const mesh = new THREE.Mesh(geometry, volumeMaterials[organ]);
 
     // Center the group and place mesh at origin-relative
@@ -373,77 +341,6 @@ function setupOrganGUIs() {
       organDataGuiMeshes[organ].visible = false;
     }
   }
-}
-
-function setupGUI() {
-  // Geometry panel
-  const geometryGui = new GUI({ width: 280 });
-  geometryGui.title('Object Transforms');
-  geometryGui.add(params, 'scale', 0.5, 1.5, 0.01).name('Scale').onChange((v) => {
-    rotatingGroup.scale.set(v, v, v);
-  });
-  geometryGui.add(params, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
-    rotatingGroup.rotation.y = v * Math.PI / 180;
-  });
-  geometryGui.add(params, 'rotUD', -90, 90, 1).name('Rotate Up/Down').onChange((v) => {
-    rotatingGroup.rotation.x = v * Math.PI / 180;
-  });
-  geometryGui.domElement.style.visibility = 'hidden';
-
-  const geometryHtmlMesh = new HTMLMesh(geometryGui.domElement);
-  geometryHtmlMesh.position.set(0.15, 1.5, -0.55);
-  geometryHtmlMesh.lookAt(vrPosition);
-  geometryHtmlMesh.scale.setScalar(1);
-  geometryGuiMesh = geometryHtmlMesh;
-
-  // Data panel
-  const dataGui = new GUI({ width: 280 });
-  dataGui.title('Data Selection');
-
-  // let organList = Object.keys(isoThresholds);
-  // let currentIndex = organList.indexOf(params.organ);
-
- dataGui.add(params, 'useIsoSurface', 0, 1, 1)
-    .name('MIP <> Isosurface')
-    .onChange((v) => {
-      if (volumeMaterial && volumeMaterial.uniforms?.u_renderstyle) {
-        volumeMaterial.uniforms['u_renderstyle'].value = v ? 1 : 0;
-      }
-    });
-
-  thresholdController = dataGui.add(params, 'threshold', 0, 1, 0.01)
-    .name('Isosurface Threshold')
-    .onChange((value) => {
-      if (thresholdUniformRef) thresholdUniformRef.value = value;
-    });
-  dataGui.add(params, 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
-    if (volumeMaterial && volumeMaterial.uniforms?.u_cmdata) {
-      volumeMaterial.uniforms['u_cmdata'].value = cmtextures[v];
-    }
-  });
-  dataGui.domElement.style.visibility = 'hidden';
-
-  const dataHtmlMesh = new HTMLMesh(dataGui.domElement);
-  dataHtmlMesh.position.set(-0.15, 1.5, -0.55);
-  dataHtmlMesh.lookAt(vrPosition);
-  dataHtmlMesh.scale.setScalar(1);
-  dataGuiMesh = dataHtmlMesh;
-
-  // Add to scene and make interactive
-  const group = new InteractiveGroup();
-  group.listenToPointerEvents(renderer, camera);
-  scene.add(group);
-  group.add(geometryGuiMesh);
-  group.add(dataGuiMesh);
-  for (let organ of organs) {
-    group.add(organTransformsGuiMeshes[organ]);
-    group.add(organDataGuiMeshes[organ]);
-  }
-
-  if (HIDEGUI) {
-    dataHtmlMesh.visible = false;
-    geometryHtmlMesh.visible = false;
-  } 
 }
 
 // =======================================
