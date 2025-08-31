@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { NRRDLoader } from 'three/addons/loaders/NRRDLoader.js';
-import { VolumeRenderShader1 } from 'three/addons/shaders/VolumeShader.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 import { HTMLMesh } from 'three/addons/interactive/HTMLMesh.js';
 import { InteractiveGroup } from 'three/addons/interactive/InteractiveGroup.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+
+import { VolumeRenderShader1 } from './VolumeShader.js';
 
 let scene, camera, renderer;
 let rotatingGroups = {};
