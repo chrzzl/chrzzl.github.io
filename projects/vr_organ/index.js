@@ -19,7 +19,7 @@ let organTitleMesh;
 // PARAMETERS
 const ROTATIONSPEED = 0.00;
 const FOV = 60;
-const DISTANCE = 312;
+const DISTANCE = 300;
 const VOLSIZE = 128;
 const HIDEGUI = false;
 
@@ -285,7 +285,7 @@ function setupOrganGUIs() {
     // Transforms panel
     const transformsGui = new GUI({ width: 250 });
     transformsGui.title(`${organTitles[organ]} - Transforms`);
-    transformsGui.add(organParams[organ], 'scale', 0.5, 1.5, 0.01).name('Scale').onChange((v) => {
+    transformsGui.add(organParams[organ], 'scale', 1, 4, 0.01).name('Scale').onChange((v) => {
       rotatingGroups[organ].scale.set(v, v, v);
     });
     transformsGui.add(organParams[organ], 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {

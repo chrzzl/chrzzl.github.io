@@ -102,7 +102,7 @@ function animate() {
     }
     if (cylinder) {
       cylinder.rotation.x += 0.004;
-      cylinder.rotation.z += 0.004;
+      cylinder.rotation.z += 0.007;
     }
 
     if (geometryGuiMesh) geometryGuiMesh.material.map.update();

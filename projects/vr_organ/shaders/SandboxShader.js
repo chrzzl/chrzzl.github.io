@@ -14,7 +14,7 @@ const SandboxShader = {
 	uniforms: {
       'u_radius': { value: 1.0 },
       'u_height': { value: 1.0 },
-      'u_segments': { value: 1.0 }
+      'u_segments': { value: 1 }
     },
 
 	vertexShader: /* glsl */`
@@ -54,12 +54,16 @@ const SandboxShader = {
 		}
 
 		vec3 polar_coloring() {
+			float N = 7.0;
 			float radius = length(v_position.xz);
-			float angle = atan(v_position.z, v_position.x);
+			float angle = atan(v_position.z, v_position.x); // 0 to 2PI
 			float r = radius / u_radius;
-			float g = angle / 2.0 /PI;
+			float g = angle / PI + 0.5;
 			float b = (v_position.y / u_height + 0.5);
-			return vec3(r, g, b);
+
+			g = sin(angle * N) * 0.5 + 0.5;
+			g = step(0.5, g);
+			return vec3(r, g, 0.0);
 		}
 
 		vec3 basic_coloring() {
