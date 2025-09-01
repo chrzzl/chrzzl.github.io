@@ -7,6 +7,7 @@ import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFa
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 import { VolumeRenderShader1 } from './shaders/VolumeShader.js';
+import { SandboxShader } from './shaders/SandboxShader.js';
 
 let scene, camera, renderer;
 let rotatingGroups = {};
@@ -204,40 +205,64 @@ function setupSceneObjects() {
 };
 
 function addCylindricalFloor(scene, radius = 5, height = 0.2, radialSegments = 64, gridLines = 16) {
-  // 1. Cylinder floor (grey)
-  const cylinderGeometry = new THREE.CylinderGeometry(radius, radius, height, radialSegments);
-  const cylinderMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
-  const metallicMaterial = new THREE.MeshStandardMaterial({
-    color: 0x888888,       // base grey color
-    metalness: 0.6,         // fully metallic
-    roughness: 0.2          // low roughness = shinier
-  });
-  const cylinder = new THREE.Mesh(cylinderGeometry, metallicMaterial);
-  cylinder.position.y = -height / 2; // So top surface lies at y=0
-  scene.add(cylinder);
+  const USESHADER = false;
+  if (!USESHADER) {
+    // 1. Cylinder floor (grey)
+    const cylinderGeometry = new THREE.CylinderGeometry(radius, radius, height, radialSegments);
+    const cylinderMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+    const metallicMaterial = new THREE.MeshStandardMaterial({
+      color: 0x888888,       // base grey color
+      metalness: 0.6,         // fully metallic
+      roughness: 0.2          // low roughness = shinier
+    });
+    const cylinder = new THREE.Mesh(cylinderGeometry, metallicMaterial);
+    cylinder.position.y = -height / 2; // So top surface lies at y=0
+    scene.add(cylinder);
 
-  // 2. Grid circle on top face (white edges)
-  const circleGeometry = new THREE.CircleGeometry(radius, radialSegments);
-  circleGeometry.rotateX(-Math.PI / 2); // face up
-  const circleEdges = new THREE.EdgesGeometry(circleGeometry);
-  const circleLine = new THREE.LineSegments(
-    circleEdges,
-    new THREE.LineBasicMaterial({ color: 0xffffff })
-  );
-  circleLine.position.y = 0.01; // Slightly above the floor to avoid z-fighting
-  scene.add(circleLine);
+    // 2. Grid circle on top face (white edges)
+    const num_circles = 5;
+    for (let i = 1; i < num_circles+1; i++) {
+      const circleGeometry = new THREE.CircleGeometry(i * radius / num_circles, radialSegments);
+      circleGeometry.rotateX(-Math.PI / 2); // face up
+      const circleEdges = new THREE.EdgesGeometry(circleGeometry);
+      const circleLine = new THREE.LineSegments(
+        circleEdges,
+        new THREE.LineBasicMaterial({ color: 0xffffff })
+      );
+      circleLine.position.y = 0.01; // Slightly above the floor to avoid z-fighting
+      scene.add(circleLine);
+    }
 
-  // 3. Radial lines (white)
-  const center = new THREE.Vector3(0, 0.011, 0); // Slightly above for visibility
-  for (let i = 0; i < gridLines; i++) {
-    const angle = (i / gridLines) * Math.PI * 2;
-    const x = Math.cos(angle) * radius;
-    const z = Math.sin(angle) * radius;
+    // 3. Radial lines (white)
+    const center = new THREE.Vector3(0, 0.011, 0); // Slightly above for visibility
+    for (let i = 0; i < gridLines; i++) {
+      const angle = (i / gridLines) * Math.PI * 2;
+      const x = Math.cos(angle) * radius;
+      const z = Math.sin(angle) * radius;
 
-    const points = [center.clone(), new THREE.Vector3(x, center.y, z)];
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff }));
-    scene.add(line);
+      const points = [center.clone(), new THREE.Vector3(x, center.y, z)];
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff }));
+      scene.add(line);
+    }
+  }
+  else {
+    // Use sandbox shader
+    const cylinderGeometry = new THREE.CylinderGeometry(radius, radius, height, radialSegments);
+    const shader = SandboxShader;
+    const uniforms = THREE.UniformsUtils.clone(shader.uniforms);
+    uniforms['u_radius'].value = radius;
+    uniforms['u_height'].value = height;
+    uniforms['u_segments'].value = radialSegments;
+    const material = new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader: shader.vertexShader,
+      fragmentShader: shader.fragmentShader,
+      side: THREE.FrontSide
+    });
+    const cylinder = new THREE.Mesh(cylinderGeometry, material);
+    cylinder.position.y = -height / 2; // So top surface lies at y=0
+    scene.add(cylinder);
   }
 }
 

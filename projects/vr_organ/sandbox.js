@@ -194,7 +194,8 @@ function addCylinder() {
     uniforms: {
       'u_radius': { value: radius },
       'u_height': { value: height },
-      'u_segments': { value: radialSegments }
+      'u_segments': { value: radialSegments },
+      'u_resolution': { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
     },
     vertexShader: shader.vertexShader,
     fragmentShader: shader.fragmentShader,
