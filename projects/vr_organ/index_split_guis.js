@@ -6,7 +6,7 @@ import { InteractiveGroup } from 'three/addons/interactive/InteractiveGroup.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
-import { VolumeRenderShader1 } from './VolumeShader.js';
+import { VolumeRenderShader1 } from './shaders/VolumeShader.js';
 
 let scene, camera, renderer, rotatingGroup;
 let thresholdUniformRef;
