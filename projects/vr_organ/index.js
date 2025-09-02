@@ -21,8 +21,8 @@ let organTitleMesh;
 const ROTATIONSPEED = 0.00;
 const FOV = 60;
 const DISTANCE = 300;
-const VOLSIZE = 128;
 const HIDEGUI = false;
+const FILESUFFIX = '2MB';
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
@@ -30,15 +30,6 @@ const vrDirection = new THREE.Vector3(0, 0, -1);
 const organs = ['eye', 'heart', 'tongue', 'brain', 'kidney'];
 
 // GUI + data config
-const params = {
-  threshold: 0.2,
-  scale: 1.0,
-  rotLR: 0,
-  rotUD: 0,
-  colormap: 1,
-  useIsoSurface: 0,
-};
-
 const isoThresholds = {
   eye: 0.20,
   heart: 0.40,
@@ -55,7 +46,7 @@ for (let organ of organs) {
     rotLR: 0,
     rotUD: 0,
     colormap: 1,
-    useIsoSurface: 0,
+    useIsoSurface: 1,
   };
 }
 
@@ -94,12 +85,11 @@ function init() {
   setupEnvironmentLighting();
 
   // Load volumetric organ data
-  const volumeSize = [VOLSIZE, VOLSIZE, VOLSIZE];
   initializeCenters(DISTANCE);
   for (let organ of organs) {
     rotatingGroups[organ] = new THREE.Group(); // Add rotating group to enable transforms
     scene.add(rotatingGroups[organ]);
-    addOrganVolume(centers[organ], volumeSize, organ, rotatingGroups[organ]);
+    addOrganVolume(centers[organ], organ, rotatingGroups[organ]);
   }
 
   // Add auxiliary scene objects
@@ -152,15 +142,17 @@ function initializeCenters(distance) {
   }
 }
 
-function addOrganVolume(center, size, organ, rotateGroup) {
-  const nrrdPath = `../../data/${organ}_${VOLSIZE}.nrrd`;
+function addOrganVolume(center, organ, rotateGroup) {
+  const nrrdPath = `../../data/${organ}_${FILESUFFIX}.nrrd`;
   const threshold = isoThresholds[organ];
-  params.threshold = threshold;
+  organParams[organ].threshold = threshold;
   const [cx, cy, cz] = center;
-  const [sx, sy, sz] = size;
 
   new NRRDLoader().load(nrrdPath, (volume) => {
-    const texture = new THREE.Data3DTexture(volume.data, volume.xLength, volume.yLength, volume.zLength);
+    const sx = volume.xLength;
+    const sy = volume.yLength;
+    const sz = volume.zLength;
+    const texture = new THREE.Data3DTexture(volume.data, sx, sy, sz);
     texture.format = THREE.RedFormat;
     texture.type = THREE.FloatType;
     texture.minFilter = texture.magFilter = THREE.LinearFilter;
@@ -172,9 +164,9 @@ function addOrganVolume(center, size, organ, rotateGroup) {
     uniforms['u_data'].value = texture;
     uniforms['u_size'].value.set(sx, sy, sz);
     uniforms['u_clim'].value.set(0, 1);
-    uniforms['u_renderstyle'].value = params.useIsoSurface;
-    uniforms['u_renderthreshold'].value = params.threshold;
-    uniforms['u_cmdata'].value = cmtextures[params.colormap];
+    uniforms['u_renderstyle'].value = organParams[organ].useIsoSurface;
+    uniforms['u_renderthreshold'].value = organParams[organ].threshold;
+    uniforms['u_cmdata'].value = cmtextures[organParams[organ].colormap];
 
     thresholdUniformRefs[organ] = uniforms['u_renderthreshold'];
 
