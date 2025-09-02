@@ -23,6 +23,7 @@ const FOV = 60;
 const DISTANCE = 300;
 const HIDEGUI = false;
 const FILESUFFIX = '2MB';
+const START_ORGAN = 'brain'
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
@@ -31,11 +32,11 @@ const organs = ['eye', 'heart', 'tongue', 'brain', 'kidney'];
 
 // GUI + data config
 const isoThresholds = {
-  eye: 0.20,
-  heart: 0.40,
-  tongue: 0.30,
-  brain: 0.24,
-  kidney: 0.40,
+  eye: 0.19,
+  heart: 0.50,
+  tongue: 0.45,
+  brain: 0.30,
+  kidney: 0.38,
 };
 
 const organParams = {};
@@ -75,17 +76,18 @@ animate();
 function init() {
   // Setup scene
   scene = new THREE.Scene();
+  initializeCenters(DISTANCE);
 
   // Setup camera
   camera = new THREE.PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.1, 5000);
   camera.position.copy(vrPosition);
   camera.lookAt(vrPosition.clone().add(vrDirection));
+  camera.lookAt(centers[START_ORGAN]);
 
   // Setup light & environment
   setupEnvironmentLighting();
 
   // Load volumetric organ data
-  initializeCenters(DISTANCE);
   for (let organ of organs) {
     rotatingGroups[organ] = new THREE.Group(); // Add rotating group to enable transforms
     scene.add(rotatingGroups[organ]);
