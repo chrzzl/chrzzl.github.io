@@ -43,6 +43,9 @@ const SandboxShader = {
     vec3 polar_coloring();
     vec3 grid_coloring();
     vec2 rotate(vec2 v, float a);
+	float sstep(float thresh, float eps, float val) {
+  		return smoothstep(thresh - 0.5*eps, thresh + 0.5*eps, val);
+	}
 
     void main() {
       vec3 color = vec3(0.0);
@@ -66,17 +69,15 @@ const SandboxShader = {
       float num_rings = 5.0;
       float grid = 0.0;
       for (float i = 1.0; i < num_rings+1.0; i++) {
-        float circle = step(i / num_rings - thickness, radius) * (1.0 - step(i / num_rings, radius));
+        float circle = sstep(i / num_rings - thickness, 0.02, radius) * (1.0 - sstep(i / num_rings, 0.02, radius));
         grid = max(grid, circle);
       }
       
       // Ray lines
       float num_rays = 5.0;
-      float ray = step(-thickness * 0.5, v_position.x / u_radius) * (1.0 - step(thickness * 0.5, v_position.x / u_radius));
-      grid = max(grid, ray);
       for (float i = 1.0; i < num_rays+1.0; i++) {
         vec2 direction = rotate(v_position.xz, i * PI / num_rays);
-        float ray = step(-thickness * 0.5, direction.x / u_radius) * (1.0 - step(thickness * 0.5, direction.x / u_radius));
+        float ray = sstep(-thickness * 0.5, 0.02, direction.x / u_radius) * (1.0 - sstep(thickness * 0.5, 0.02, direction.x / u_radius));
         grid = max(grid, ray);
       }
 
