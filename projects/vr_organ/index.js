@@ -271,19 +271,19 @@ function setupEnvironmentLighting() {
   scene.add(dirLight);
 
   // Skybox
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
-  const skybox = new THREE.CubeTextureLoader()
-  .setPath('textures/skybox/')
-  .load([
-    'space_rt.png', // +X (right)
-    'space_lf.png', // -X (left)
-    'space_up.png', // +Y (up)
-    'space_dn.png', // -Y (down)
-    'space_ft.png', // +Z (front)
-    'space_bk.png'  // -Z (back)
-  ]);
-  scene.background = skybox;     // ← makes it visible as background
-  scene.environment = skybox;   // ← enables reflections
+  // scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+  // const skybox = new THREE.CubeTextureLoader()
+  // .setPath('textures/skybox/')
+  // .load([
+  //   'space_rt.png', // +X (right)
+  //   'space_lf.png', // -X (left)
+  //   'space_up.png', // +Y (up)
+  //   'space_dn.png', // -Y (down)
+  //   'space_ft.png', // +Z (front)
+  //   'space_bk.png'  // -Z (back)
+  // ]);
+  // scene.background = skybox;     // ← makes it visible as background
+  // scene.environment = skybox;   // ← enables reflections
 
 
 }
