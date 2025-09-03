@@ -19,7 +19,7 @@ let organTitleMesh;
 
 // PARAMETERS
 const ROTATIONSPEED = 0.00;
-const FOV = 60;
+const FOV = 70;
 const DISTANCE = 300;
 const HIDEGUI = false;
 const FILESUFFIX = '2MB';
@@ -28,7 +28,7 @@ const START_ORGAN = 'brain'
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
 
-const organs = ['eye', 'heart', 'tongue', 'brain', 'kidney'];
+const organs = ['kidney', 'heart', 'tongue', 'brain', 'eye'];
 
 // GUI + data config
 const isoThresholds = {
@@ -36,14 +36,22 @@ const isoThresholds = {
   heart: 0.50,
   tongue: 0.45,
   brain: 0.30,
-  kidney: 0.38,
+  kidney: 0.40,
+};
+
+const rotations = {
+  eye: new THREE.Euler(-17 * Math.PI / 180, -120 * Math.PI / 180, -85 * Math.PI / 180),
+  heart: new THREE.Euler(0, 80 * Math.PI / 180, 90 * Math.PI / 180),
+  tongue: new THREE.Euler(-22 * Math.PI / 180, 0, 0),
+  brain: new THREE.Euler(0, -90 * Math.PI / 180, 90 * Math.PI / 180),
+  kidney: new THREE.Euler(108 * Math.PI / 180, 180 * Math.PI / 180, 0),
 };
 
 const organParams = {};
 for (let organ of organs) {
   organParams[organ] = {
     threshold: isoThresholds[organ],
-    scale: 1.0,
+    scale: 1.5,
     rotLR: 0,
     rotUD: 0,
     colormap: 1,
@@ -81,7 +89,6 @@ function init() {
   // Setup camera
   camera = new THREE.PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.1, 5000);
   camera.position.copy(vrPosition);
-  camera.lookAt(vrPosition.clone().add(vrDirection));
   camera.lookAt(centers[START_ORGAN]);
 
   // Setup light & environment
@@ -120,7 +127,8 @@ function animate() {
   renderer.setAnimationLoop(() => {
     for (let organ of organs) {
       // Rotate the volumes
-      rotatingGroups[organ].rotation.y += ROTATIONSPEED;
+      rotatingGroups[organ].rotation.x += ROTATIONSPEED;
+
       // Update the GUIs
       if (organTransformsGuiMeshes[organ]) organTransformsGuiMeshes[organ].material.map.update();
       if (organDataGuiMeshes[organ]) organDataGuiMeshes[organ].material.map.update();
@@ -181,14 +189,26 @@ function addOrganVolume(center, organ, rotateGroup) {
       side: THREE.BackSide
     });
     const mesh = new THREE.Mesh(geometry, volumeMaterials[organ]);
-
-    // Center the group and place mesh at origin-relative
-    rotateGroup.position.set(cx, cy, cz);
     mesh.position.set(-sx / 2, -sy / 2, -sz / 2);
-    rotateGroup.add(mesh);
-    rotateGroup.lookAt(vrPosition);
+
+    // === Create group hierarchy ===
+    const yawGroup = new THREE.Group();
+    const placingGroup = new THREE.Group();
+
+    scene.add(yawGroup);
+    yawGroup.add(rotateGroup);
+    rotateGroup.add(placingGroup);
+    placingGroup.add(mesh);
+
+    // === Positioning ===
+    yawGroup.position.set(cx, cy, cz);
+    yawGroup.lookAt(vrPosition); // Make it face the camera
+
+    // === Apply fixed organ-specific rotation to placingGroup ===
+    placingGroup.rotation.copy(rotations[organ]);
   });
 }
+
 
 // =======================================
 // Scene Objects
@@ -310,7 +330,7 @@ function setupOrganGUIs() {
     transformsGui.add(organParams[organ], 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
       rotatingGroups[organ].rotation.y = v * Math.PI / 180;
     });
-    transformsGui.add(organParams[organ], 'rotUD', -90, 90, 1).name('Rotate Up/Down').onChange((v) => {
+    transformsGui.add(organParams[organ], 'rotUD', -180, 180, 1).name('Rotate Up/Down').onChange((v) => {
       rotatingGroups[organ].rotation.x = v * Math.PI / 180;
     });
     transformsGui.domElement.style.visibility = 'hidden';
