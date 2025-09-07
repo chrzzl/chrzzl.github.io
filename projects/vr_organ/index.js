@@ -15,6 +15,7 @@ let centers = {};
 let thresholdUniformRefs = {};
 let volumeMaterials = {};
 let organTransformsGuiMeshes = {}, organDataGuiMeshes = {};
+let htmlGUI;
 let organTitleMesh;
 
 // PARAMETERS
@@ -23,7 +24,7 @@ const FOV = 70;
 const DISTANCE = 300;
 const HIDEGUI = false;
 const FILESUFFIX = '2MB';
-const START_ORGAN = 'brain'
+const START_ORGAN = 'kidney'
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
@@ -215,7 +216,7 @@ function addOrganVolume(center, organ, rotateGroup) {
 // =======================================
 
 function setupSceneObjects() {
-  addCylindricalFloor(scene, 5, 0.1, 64, 16);
+  addCylindricalFloor(scene, 5, 0.1, 64, 10);
 };
 
 function addCylindricalFloor(scene, radius = 5, height = 0.2, radialSegments = 64, gridLines = 16) {
@@ -287,7 +288,7 @@ function addCylindricalFloor(scene, radius = 5, height = 0.2, radialSegments = 6
 function setupEnvironmentLighting() {
   // Lighting
   const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-  dirLight.position.set(5, 10, 7.5);
+  dirLight.position.set(0, 1, 0);
   scene.add(dirLight);
 
   // Skybox
@@ -378,12 +379,30 @@ function setupOrganGUIs() {
     // Add to interactive group
     group.add(organTransformsGuiMeshes[organ]);
     group.add(organDataGuiMeshes[organ]);
-
+    
     if (HIDEGUI) {
       organTransformsGuiMeshes[organ].visible = false;
       organDataGuiMeshes[organ].visible = false;
     }
   }
+  
+  // Add organ selection GUI (only non-xr)
+  htmlGUI = new GUI({ width: 200});
+  htmlGUI.title('Organ Selection');
+
+  htmlGUI.domElement.style.position = 'absolute';
+  htmlGUI.domElement.style.left = '50%';
+  htmlGUI.domElement.style.transform ='translateX(-50%)';
+  htmlGUI.domElement.style.top = '100px';
+  htmlGUI.domElement.style.zIndex = '1000'; // make sure it's on top
+
+  const guiParams = { selectedOrgan: START_ORGAN };
+
+  htmlGUI.add(guiParams, 'selectedOrgan', Object.keys(isoThresholds))
+    .name('Organ Selection')
+    .onChange((organ) => {
+      camera.lookAt(centers[organ]);
+    });
 }
 
 // =======================================
