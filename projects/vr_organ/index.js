@@ -20,8 +20,8 @@ let organTitleMesh;
 
 // PARAMETERS
 const ROTATIONSPEED = 0.00;
-const FOV = 70;
-const DISTANCE = 300;
+const FOV = 100;
+const DISTANCE = 170;
 const HIDEGUI = false;
 const FILESUFFIX = '2MB';
 const START_ORGAN = 'kidney'
@@ -36,7 +36,7 @@ const isoThresholds = {
   eye: 0.19,
   heart: 0.50,
   tongue: 0.45,
-  brain: 0.30,
+  brain: 0.26,
   kidney: 0.40,
 };
 
@@ -52,7 +52,7 @@ const organParams = {};
 for (let organ of organs) {
   organParams[organ] = {
     threshold: isoThresholds[organ],
-    scale: 1.5,
+    scale: 1,
     rotLR: 0,
     rotUD: 0,
     colormap: 1,
@@ -110,7 +110,7 @@ function init() {
   setupControllers();
 
   // Add GUI
-  setupOrganTitles();
+  //setupOrganTitles();
   setupOrganGUIs();
 
   // Add credits
@@ -216,7 +216,7 @@ function addOrganVolume(center, organ, rotateGroup) {
 // =======================================
 
 function setupSceneObjects() {
-  addCylindricalFloor(scene, 5, 0.1, 64, 10);
+  addCylindricalFloor(scene, 2, 0.1, 64, 10);
 };
 
 function addCylindricalFloor(scene, radius = 5, height = 0.2, radialSegments = 64, gridLines = 16) {
@@ -314,9 +314,10 @@ function setupEnvironmentLighting() {
 // =======================================
 
 function setupOrganGUIs() {
-  const angleOffset = 0.04 * Math.PI * 2;
-  const guiDistance = 0.5;
-  const guiScale = 0.9;
+  const angleOffset = 0.045 * Math.PI * 2;
+  const guiDistance = 0.3;
+  const guiScale = 0.65;
+  const guiHeight = 1.47;
 
   const group = new InteractiveGroup();
   group.listenToPointerEvents(renderer, camera);
@@ -325,7 +326,7 @@ function setupOrganGUIs() {
     // Transforms panel
     const transformsGui = new GUI({ width: 250 });
     transformsGui.title(`${organTitles[organ]} - Transforms`);
-    transformsGui.add(organParams[organ], 'scale', 1, 4, 0.01).name('Scale').onChange((v) => {
+    transformsGui.add(organParams[organ], 'scale', 0.5, 2, 0.01).name('Scale').onChange((v) => {
       rotatingGroups[organ].scale.set(v, v, v);
     });
     transformsGui.add(organParams[organ], 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
@@ -338,7 +339,7 @@ function setupOrganGUIs() {
 
     organTransformsGuiMeshes[organ] = new HTMLMesh(transformsGui.domElement);
     const angle = (organs.indexOf(organ) / organs.length) * Math.PI * 2;
-    const position = new THREE.Vector3(0, 1.5, 0);
+    const position = new THREE.Vector3(0, guiHeight, 0);
     position.x += Math.sin(angle + angleOffset) * guiDistance;
     position.z -= Math.cos(angle + angleOffset) * guiDistance;
     organTransformsGuiMeshes[organ].position.copy(position);
@@ -369,7 +370,7 @@ function setupOrganGUIs() {
     dataGui.domElement.style.visibility = 'hidden';
 
     organDataGuiMeshes[organ] = new HTMLMesh(dataGui.domElement);
-    const position2 = new THREE.Vector3(0, 1.5, 0);
+    const position2 = new THREE.Vector3(0, guiHeight, 0);
     position2.x += Math.sin(angle - angleOffset) * guiDistance;
     position2.z -= Math.cos(angle - angleOffset) * guiDistance;
     organDataGuiMeshes[organ].position.copy(position2);
@@ -477,12 +478,13 @@ function setupOrganTitle(organ) {
 }
 
 function setupOrganTitles() {
+  const titleDistance = 0.5;
   for (let organ of organs) {
     organTitleMesh = createTextLabel(organ);
     const angle = (organs.indexOf(organ) / organs.length) * Math.PI * 2;
-    const position = new THREE.Vector3(0, 2.0, 0);
-    position.x += Math.sin(angle);
-    position.z -= Math.cos(angle);
+    const position = new THREE.Vector3(0, 1.93, 0);
+    position.x += Math.sin(angle) * titleDistance;
+    position.z -= Math.cos(angle) * titleDistance;
     organTitleMesh.position.copy(position);
     organTitleMesh.lookAt(vrPosition);
     scene.add(organTitleMesh);
