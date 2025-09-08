@@ -314,11 +314,11 @@ function setupEnvironmentLighting() {
 // =======================================
 
 function setupOrganGUIs() {
-  const angleOffset = 0.045 * Math.PI * 2;
-  const guiDistance = 0.3;
+  const offset = 0.081;
+  const guiDistance = 0.27;
   const guiScale = 0.65;
   const guiHeight = 1.47;
-
+  
   const group = new InteractiveGroup();
   group.listenToPointerEvents(renderer, camera);
   scene.add(group);
@@ -336,16 +336,19 @@ function setupOrganGUIs() {
       rotatingGroups[organ].rotation.x = v * Math.PI / 180;
     });
     transformsGui.domElement.style.visibility = 'hidden';
-
+    
     organTransformsGuiMeshes[organ] = new HTMLMesh(transformsGui.domElement);
     const angle = (organs.indexOf(organ) / organs.length) * Math.PI * 2;
     const position = new THREE.Vector3(0, guiHeight, 0);
-    position.x += Math.sin(angle + angleOffset) * guiDistance;
-    position.z -= Math.cos(angle + angleOffset) * guiDistance;
+    position.x += Math.sin(angle) * guiDistance;
+    position.z -= Math.cos(angle) * guiDistance;
     organTransformsGuiMeshes[organ].position.copy(position);
     organTransformsGuiMeshes[organ].lookAt(vrPosition);
+    const localX = new THREE.Vector3(1, 0, 0); // local x direction
+    const organTransformsOffset = localX.applyQuaternion(organTransformsGuiMeshes[organ].quaternion).multiplyScalar(offset);
+    organTransformsGuiMeshes[organ].position.add(organTransformsOffset);
     organTransformsGuiMeshes[organ].scale.setScalar(guiScale);
-
+    
     // Data panel
     const dataGui = new GUI({ width: 250 });
     dataGui.title(`${organTitles[organ]} - Visualization`);
@@ -357,24 +360,27 @@ function setupOrganGUIs() {
           volumeMaterials[organ].uniforms['u_renderstyle'].value = v ? 1 : 0;
         }
       });
-    dataGui.add(organParams[organ], 'threshold', 0, 1, 0.01)
+      dataGui.add(organParams[organ], 'threshold', 0, 1, 0.01)
       .name('Isosurf. Threshold')
       .onChange((value) => {
         if (thresholdUniformRefs[organ]) thresholdUniformRefs[organ].value = value;
       });
-    dataGui.add(organParams[organ], 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
-      if (volumeMaterials[organ] && volumeMaterials[organ].uniforms?.u_cmdata) {
-        volumeMaterials[organ].uniforms['u_cmdata'].value = cmtextures[v];
-      }
+      dataGui.add(organParams[organ], 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
+        if (volumeMaterials[organ] && volumeMaterials[organ].uniforms?.u_cmdata) {
+          volumeMaterials[organ].uniforms['u_cmdata'].value = cmtextures[v];
+        }
     });
     dataGui.domElement.style.visibility = 'hidden';
 
     organDataGuiMeshes[organ] = new HTMLMesh(dataGui.domElement);
     const position2 = new THREE.Vector3(0, guiHeight, 0);
-    position2.x += Math.sin(angle - angleOffset) * guiDistance;
-    position2.z -= Math.cos(angle - angleOffset) * guiDistance;
+    position2.x += Math.sin(angle) * guiDistance;
+    position2.z -= Math.cos(angle) * guiDistance;
     organDataGuiMeshes[organ].position.copy(position2);
     organDataGuiMeshes[organ].lookAt(vrPosition);
+    const localX2 = new THREE.Vector3(-1, 0, 0); // local x direction
+    const organDataOffset = localX2.applyQuaternion(organDataGuiMeshes[organ].quaternion).multiplyScalar(offset);
+    organDataGuiMeshes[organ].position.add(organDataOffset);
     organDataGuiMeshes[organ].scale.setScalar(guiScale); 
 
     // Add to interactive group
@@ -390,20 +396,20 @@ function setupOrganGUIs() {
   // Add organ selection GUI (only non-xr)
   htmlGUI = new GUI({ width: 200});
   htmlGUI.title('Organ Selection');
-
+  
   htmlGUI.domElement.style.position = 'absolute';
   htmlGUI.domElement.style.left = '50%';
   htmlGUI.domElement.style.transform ='translateX(-50%)';
   htmlGUI.domElement.style.top = '100px';
   htmlGUI.domElement.style.zIndex = '1000'; // make sure it's on top
-
+  
   const guiParams = { selectedOrgan: START_ORGAN };
-
+  
   htmlGUI.add(guiParams, 'selectedOrgan', Object.keys(isoThresholds))
-    .name('Organ Selection')
-    .onChange((organ) => {
-      camera.lookAt(centers[organ]);
-    });
+  .name('Organ Selection')
+  .onChange((organ) => {
+    camera.lookAt(centers[organ]);
+  });
 }
 
 // =======================================
