@@ -219,7 +219,7 @@ function setupSceneObjects() {
   addCylindricalFloor(scene, 2, 0.1, 64, 10);
 };
 
-function addCylindricalFloor(scene, radius = 5, height = 0.2, radialSegments = 64, gridLines = 16) {
+function addCylindricalFloor(scene, radius, height, radialSegments, gridLines) {
   const USESHADER = false;
   if (!USESHADER) {
     // 1. Cylinder floor (grey)
@@ -314,17 +314,18 @@ function setupEnvironmentLighting() {
 // =======================================
 
 function setupOrganGUIs() {
-  const offset = 0.081;
-  const guiDistance = 0.27;
-  const guiScale = 0.65;
-  const guiHeight = 1.47;
+  const offset = 1.0;
+  const guiDistance = 3.0;
+  const guiScale = 8.0;
+  const guiHeight = 0.3;
+  const guiWidth = 250;
   
   const group = new InteractiveGroup();
   group.listenToPointerEvents(renderer, camera);
   scene.add(group);
   for (let organ of organs) {
     // Transforms panel
-    const transformsGui = new GUI({ width: 250 });
+    const transformsGui = new GUI({ width: guiWidth });
     transformsGui.title(`${organTitles[organ]} - Transforms`);
     transformsGui.add(organParams[organ], 'scale', 0.5, 2, 0.01).name('Scale').onChange((v) => {
       rotatingGroups[organ].scale.set(v, v, v);
@@ -350,7 +351,7 @@ function setupOrganGUIs() {
     organTransformsGuiMeshes[organ].scale.setScalar(guiScale);
     
     // Data panel
-    const dataGui = new GUI({ width: 250 });
+    const dataGui = new GUI({ width: guiWidth });
     dataGui.title(`${organTitles[organ]} - Visualization`);
 
     dataGui.add(organParams[organ], 'useIsoSurface', 0, 1, 1)
