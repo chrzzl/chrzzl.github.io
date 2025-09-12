@@ -216,7 +216,8 @@ function addOrganVolume(center, organ, rotateGroup) {
 // =======================================
 
 function setupSceneObjects() {
-  addCylindricalFloor(scene, 2, 0.1, 64, 10);
+  const floorRadius = 2;
+  addCylindricalFloor(scene, floorRadius, 0.1, 64, 10);
 };
 
 function addCylindricalFloor(scene, radius, height, radialSegments, gridLines) {
@@ -314,10 +315,10 @@ function setupEnvironmentLighting() {
 // =======================================
 
 function setupOrganGUIs() {
-  const offset = 1.0;
-  const guiDistance = 3.0;
-  const guiScale = 8.0;
-  const guiHeight = 0.3;
+  const offset = 0.75;
+  const guiDistance = 3.5;
+  const guiScale = 6.0;
+  const guiHeight = -0.5;
   const guiWidth = 250;
   
   const group = new InteractiveGroup();
