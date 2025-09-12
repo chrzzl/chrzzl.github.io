@@ -25,6 +25,7 @@ const DISTANCE = 170;
 const HIDEGUI = false;
 const FILESUFFIX = '2MB';
 const START_ORGAN = 'kidney'
+const SCALE_COEFF = 0.5;
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 const vrDirection = new THREE.Vector3(0, 0, -1);
@@ -207,6 +208,10 @@ function addOrganVolume(center, organ, rotateGroup) {
 
     // === Apply fixed organ-specific rotation to placingGroup ===
     placingGroup.rotation.copy(rotations[organ]);
+
+    // Scale
+    const organScale = organParams[organ].scale * SCALE_COEFF;
+    rotatingGroups[organ].scale.set(organScale, organScale, organScale);
   });
 }
 
@@ -328,8 +333,8 @@ function setupOrganGUIs() {
     // Transforms panel
     const transformsGui = new GUI({ width: guiWidth });
     transformsGui.title(`${organTitles[organ]} - Transforms`);
-    transformsGui.add(organParams[organ], 'scale', 0.5, 2, 0.01).name('Scale').onChange((v) => {
-      rotatingGroups[organ].scale.set(v, v, v);
+    transformsGui.add(organParams[organ], 'scale', 1, 3, 0.1).name('Scale').onChange((v) => {
+      rotatingGroups[organ].scale.set(v*SCALE_COEFF, v*SCALE_COEFF, v*SCALE_COEFF);
     });
     transformsGui.add(organParams[organ], 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
       rotatingGroups[organ].rotation.y = v * Math.PI / 180;
