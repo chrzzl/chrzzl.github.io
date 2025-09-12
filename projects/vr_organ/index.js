@@ -20,7 +20,7 @@ let organTitleMesh;
 
 // PARAMETERS
 const ROTATIONSPEED = 0.00;
-const FOV = 100;
+const FOV = 80;
 const DISTANCE = 170;
 const HIDEGUI = false;
 const FILESUFFIX = '2MB';
