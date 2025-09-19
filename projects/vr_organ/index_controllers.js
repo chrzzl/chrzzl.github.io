@@ -511,7 +511,7 @@ function setupOrganTitles() {
 function setupCredits(renderer) {
   const creditsDiv = document.createElement('div');
   creditsDiv.id = 'credits';
-  creditsDiv.innerHTML = 'Code by Christoph Karg <br>Data by Dechend Lab';
+  creditsDiv.innerHTML = 'Code by C. Karg from Kainmüller Lab <br>Data by K. Kräker from Müller/Dechend Lab';
   creditsDiv.style.position = 'absolute';
   creditsDiv.style.top = '10px';
   creditsDiv.style.right = '10px';
