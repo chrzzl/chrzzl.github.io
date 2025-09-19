@@ -19,10 +19,10 @@ let htmlGUI;
 let organTitleMesh;
 
 // PARAMETERS
-const ROTATIONSPEED = 0.002;
+const ROTATIONSPEED = 0.00;
 const FOV = 80;
 const DISTANCE = 170;
-const HIDEGUI = true;
+const HIDEGUI = false;
 const FILESUFFIX = '2MB';
 const START_ORGAN = 'kidney'
 const SCALE_COEFF = 0.5;
@@ -53,7 +53,7 @@ const organParams = {};
 for (let organ of organs) {
   organParams[organ] = {
     threshold: isoThresholds[organ],
-    scale: 1.5,
+    scale: 1,
     rotLR: 0,
     rotUD: 0,
     colormap: 1,
@@ -129,7 +129,7 @@ function animate() {
   renderer.setAnimationLoop(() => {
     for (let organ of organs) {
       // Rotate the volumes
-      rotatingGroups[organ].rotation.y += ROTATIONSPEED;
+      rotatingGroups[organ].rotation.x += ROTATIONSPEED;
 
       // Update the GUIs
       if (organTransformsGuiMeshes[organ]) organTransformsGuiMeshes[organ].material.map.update();

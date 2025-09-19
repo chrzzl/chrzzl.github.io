@@ -25,15 +25,18 @@ def convert_and_compress_to_webp(input_path, output_path, max_size_kb):
 
 def process_directory(base_dir):
     for root, dirs, files in os.walk(base_dir):
-        if TARGET_NAME in files:
-            input_path = os.path.join(root, TARGET_NAME)
-            output_path = os.path.join(root, OUTPUT_NAME)
+        for filename in files:
+            if filename.lower().endswith(".jpg") and "thumbnail" in filename.lower():
+                input_path = os.path.join(root, filename)
+                output_name = os.path.splitext(filename)[0] + ".webp"
+                output_path = os.path.join(root, output_name)
 
-            convert_and_compress_to_webp(input_path, output_path, MAX_SIZE_KB)
+                convert_and_compress_to_webp(input_path, output_path, MAX_SIZE_KB)
 
-            if REMOVE_ORIGINAL:
-                os.remove(input_path)
-                print(f"🗑 Removed original: {input_path}")
+                if REMOVE_ORIGINAL:
+                    os.remove(input_path)
+                    print(f"Removed original: {input_path}")
+
 
 if __name__ == "__main__":
     process_directory(TARGET_DIR)
