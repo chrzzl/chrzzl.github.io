@@ -17,6 +17,8 @@ let volumeMaterials = {};
 let organTransformsGuiMeshes = {}, organDataGuiMeshes = {};
 let htmlGUI;
 let organTitleMesh;
+let controller1, controller2;
+let group; // GUI group
 
 // PARAMETERS
 const ROTATIONSPEED = 0.00;
@@ -325,10 +327,20 @@ function setupOrganGUIs() {
   const guiScale = 6.0;
   const guiHeight = -0.5;
   const guiWidth = 250;
+
+  if (!group) {
+    group = new InteractiveGroup();
+    group.listenToPointerEvents(renderer, camera);
+    scene.add(group);
+
+    // if controllers already exist, hook them up now
+    if (controller1) group.listenToXRControllerEvents(controller1);
+    if (controller2) group.listenToXRControllerEvents(controller2);
+  }
   
-  const group = new InteractiveGroup();
-  group.listenToPointerEvents(renderer, camera);
-  scene.add(group);
+  // const group = new InteractiveGroup();
+  // group.listenToPointerEvents(renderer, camera);
+  // scene.add(group);
   for (let organ of organs) {
     // Transforms panel
     const transformsGui = new GUI({ width: guiWidth });
@@ -438,19 +450,18 @@ function setupXRButton() {
 };
 
 function setupControllers() {
-  const geometry = new THREE.BufferGeometry();
-  geometry.setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -5)]);
+  const geometry = new THREE.BufferGeometry()
+    .setFromPoints([ new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-5) ]);
 
-  const controller1 = renderer.xr.getController(0);
+  controller1 = renderer.xr.getController(0);
   controller1.add(new THREE.Line(geometry));
   scene.add(controller1);
 
-  const controller2 = renderer.xr.getController(1);
+  controller2 = renderer.xr.getController(1);
   controller2.add(new THREE.Line(geometry));
   scene.add(controller2);
 
   const factory = new XRControllerModelFactory();
-
   const grip1 = renderer.xr.getControllerGrip(0);
   grip1.add(factory.createControllerModel(grip1));
   scene.add(grip1);
@@ -458,7 +469,14 @@ function setupControllers() {
   const grip2 = renderer.xr.getControllerGrip(1);
   grip2.add(factory.createControllerModel(grip2));
   scene.add(grip2);
+
+  // hook controllers into the interactive group if it already exists
+  if (group) {
+    group.listenToXRControllerEvents(controller1);
+    group.listenToXRControllerEvents(controller2);
+  }
 }
+
 
 // =======================================
 // Text Labels
