@@ -9,7 +9,7 @@ import {
  * This is not the only approach, therefore it's marked 1.
  */
 
-const VolumeRenderShader1 = {
+const WormShader = {
 
 	uniforms: {
 		'u_size': { value: new Vector3( 1, 1, 1 ) },
@@ -296,4 +296,4 @@ const VolumeRenderShader1 = {
 
 };
 
-export { VolumeRenderShader1 };
+export { WormShader };

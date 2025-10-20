@@ -6,7 +6,7 @@ import { InteractiveGroup } from 'three/addons/interactive/InteractiveGroup.js';
 import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
-import { VolumeRenderShader1 } from './shaders/VolumeShader.js';
+import { WormShader } from './shaders/WormShader.js';
 import { SandboxShader } from './shaders/SandboxShader.js';
 
 let scene, camera, renderer;
@@ -34,9 +34,22 @@ const volumes = ['raw', 'gt_mask', 'stardist_mask'];
 
 // GUI + data config
 const isoThresholds = {
-  raw: 0.00,
+  raw: 0.90,
   gt_mask: 0.00,
   stardist_mask: 0.00,
+};
+
+const colormaps = {
+  raw: 1,
+  gt_mask: 4,
+  stardist_mask: 2,
+};
+
+// NOTE: 0 = raw, 1 = fg_bg, 2 = instances
+const renderstyles = {
+  raw: 0,
+  gt_mask: 1,
+  stardist_mask: 1,
 };
 
 const rotations = {
@@ -52,7 +65,8 @@ for (let worm of volumes) {
     scale: 1,
     rotLR: 0,
     rotUD: 0,
-    colormap: 1,
+    renderstyle: renderstyles[worm],
+    colormap: colormaps[worm],
     useIsoSurface: 1,
   };
 }
@@ -171,12 +185,12 @@ function addwormVolume(center, worm, rotateGroup) {
     texture.unpackAlignment = 1;
     texture.needsUpdate = true;
 
-    const shader = VolumeRenderShader1;
+    const shader = WormShader;
     const uniforms = THREE.UniformsUtils.clone(shader.uniforms);
     uniforms['u_data'].value = texture;
     uniforms['u_size'].value.set(sx, sy, sz);
     uniforms['u_clim'].value.set(0, 1);
-    uniforms['u_renderstyle'].value = wormParams[worm].useIsoSurface;
+    uniforms['u_renderstyle'].value = wormParams[worm].renderstyle;
     uniforms['u_renderthreshold'].value = wormParams[worm].threshold;
     uniforms['u_cmdata'].value = cmtextures[wormParams[worm].colormap];
 
