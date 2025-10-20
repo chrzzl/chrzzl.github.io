@@ -132,10 +132,8 @@ const WormShader = {
 						// gl_FragColor = vec4(v_cam_origin.x, v_cam_origin.y, 0.0, 1.0);
 						// return;
 
-						if (u_renderstyle == 0)
-								cast_mip(start_loc, step, nsteps, view_ray);
-						else if (u_renderstyle == 1)
-								cast_iso(start_loc, step, nsteps, view_ray);
+						// Cast the ray for isosurface rendering
+						cast_iso(start_loc, step, nsteps, view_ray);
 
 						if (gl_FragColor.a < 0.05)
 								discard;
@@ -143,50 +141,31 @@ const WormShader = {
 
 
 				float sample1(vec3 texcoords) {
-						/* Sample float value from a 3D texture. Assumes intensity data. */
-						return texture(u_data, texcoords.xyz).r;
+					float t = texture(u_data, texcoords).r;
+
+					// Normalize mode flags
+					float m0 = float(u_renderstyle == 0);
+					float m1 = float(u_renderstyle == 1);
+					float m2 = float(u_renderstyle == 2);
+
+					// Mode 0: intensity normalization
+					float val0 = t / 255.0;
+
+					// Mode 1: binary threshold → 0.5 if nonzero
+					float val1 = mix(0.0, 0.5, step(1e-6, abs(t)));
+
+					// Mode 2: scaled absolute value
+					float val2 = abs(t) / 700.0;
+
+					// Combine all using linear selection (no branching)
+					return val0 * m0 + val1 * m1 + val2 * m2;
 				}
+
 
 
 				vec4 apply_colormap(float val) {
 						val = (val - u_clim[0]) / (u_clim[1] - u_clim[0]);
 						return texture2D(u_cmdata, vec2(val, 0.5));
-				}
-
-
-				void cast_mip(vec3 start_loc, vec3 step, int nsteps, vec3 view_ray) {
-
-						float max_val = -1e6;
-						int max_i = 100;
-						vec3 loc = start_loc;
-
-						// Enter the raycasting loop. In WebGL 1 the loop index cannot be compared with
-						// non-constant expression. So we use a hard-coded max, and an additional condition
-						// inside the loop.
-						for (int iter=0; iter<MAX_STEPS; iter++) {
-								if (iter >= nsteps)
-										break;
-								// Sample from the 3D texture
-								float val = sample1(loc);
-								// Apply MIP operation
-								if (val > max_val) {
-										max_val = val;
-										max_i = iter;
-								}
-								// Advance location deeper into the volume
-								loc += step;
-						}
-
-						// Refine location, gives crispier images
-						vec3 iloc = start_loc + step * (float(max_i) - 0.5);
-						vec3 istep = step / float(REFINEMENT_STEPS);
-						for (int i=0; i<REFINEMENT_STEPS; i++) {
-								max_val = max(max_val, sample1(iloc));
-								iloc += istep;
-						}
-
-						// Resolve final color
-						gl_FragColor = apply_colormap(max_val);
 				}
 
 

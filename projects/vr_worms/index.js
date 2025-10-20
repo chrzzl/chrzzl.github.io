@@ -22,7 +22,7 @@ let group; // GUI group
 
 // PARAMETERS
 const ROTATIONSPEED = 0.00;
-const FOV = 110;
+const FOV = 90;
 const DISTANCE = 270;
 const HIDEGUI = false;
 const START_worm = 'raw'
@@ -34,22 +34,22 @@ const volumes = ['raw', 'gt_mask', 'stardist_mask'];
 
 // GUI + data config
 const isoThresholds = {
-  raw: 0.90,
+  raw: 0.08,
   gt_mask: 0.00,
   stardist_mask: 0.00,
 };
 
 const colormaps = {
-  raw: 1,
-  gt_mask: 4,
-  stardist_mask: 2,
+  raw: 3,
+  gt_mask: 1,
+  stardist_mask: 1,
 };
 
 // NOTE: 0 = raw, 1 = fg_bg, 2 = instances
 const renderstyles = {
   raw: 0,
-  gt_mask: 1,
-  stardist_mask: 1,
+  gt_mask: 2,
+  stardist_mask: 2,
 };
 
 const rotations = {
