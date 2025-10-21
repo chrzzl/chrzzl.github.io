@@ -71,6 +71,8 @@ const transformParams = {
   scale: 1,
   rotLR: 0,
   rotUD: 0,
+  interwormDistance: 100,
+  leftrightOffset: 0,
 }
 
 const filePaths = {
@@ -161,12 +163,11 @@ function animate() {
 // =======================================
 
 function initializeCenters(distance) {
-  const spaceDelta = 70;
   const rawCenter = new THREE.Vector3(0, 1.7, -distance);
   centers['raw'] = rawCenter;
-  const gt_maskCenter = new THREE.Vector3(0, 1.7 + spaceDelta, -distance);
+  const gt_maskCenter = new THREE.Vector3(0, 1.7, -distance);
   centers['gt_mask'] = gt_maskCenter;
-  const stardist_maskCenter = new THREE.Vector3(0, 1.7 + spaceDelta*2, -distance);
+  const stardist_maskCenter = new THREE.Vector3(0, 1.7, -distance);
   centers['stardist_mask'] = stardist_maskCenter;
 }
 
@@ -230,6 +231,11 @@ function addwormVolume(center, worm, rotateGroup) {
     // Scale
     const volumescale = transformParams.scale * SCALE_COEFF;
     rotatingGroups[worm].scale.set(volumescale, volumescale, volumescale);
+
+    // Offset
+    rotatingGroups['raw'].position.y = 1.7 - transformParams.interwormDistance;
+    rotatingGroups['gt_mask'].position.y = 1.7;
+    rotatingGroups['stardist_mask'].position.y = 1.7 + transformParams.interwormDistance;
   });
 }
 
@@ -371,6 +377,11 @@ function setupwormGUIs() {
     rotatingGroups['raw'].rotation.x = v * Math.PI / 180;
     rotatingGroups['gt_mask'].rotation.x = v * Math.PI / 180;
     rotatingGroups['stardist_mask'].rotation.x = v * Math.PI / 180;
+  });
+  transformsGui.add(transformParams, 'interwormDistance', 0, 100, 1).name('Interworm Distance').onChange((v) => {
+    rotatingGroups['raw'].position.y = 1.7 - v;
+    rotatingGroups['gt_mask'].position.y = 1.7;
+    rotatingGroups['stardist_mask'].position.y = 1.7 + v;
   });
   transformsGui.domElement.style.visibility = 'hidden';
   
