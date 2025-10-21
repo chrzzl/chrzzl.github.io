@@ -76,10 +76,16 @@ const transformParams = {
 }
 
 const filePaths = {
-  raw: '../../data/worms/raw.nrrd',
-  gt_mask: '../../data/worms/mask.nrrd',
-  stardist_mask: '../../data/worms/stardist_mask.nrrd',
+  raw: '../../data/worms/raw_0_50.nrrd',
+  gt_mask: '../../data/worms/mask_0_50.nrrd',
+  stardist_mask: '../../data/worms/stardist_mask_0_50.nrrd',
 };
+// NOTE: In case original resolution is desired, use:
+// const filePaths = {
+//   raw: '../../data/worms/raw.nrrd',
+//   gt_mask: '../../data/worms/mask.nrrd',
+//   stardist_mask: '../../data/worms/stardist_mask.nrrd',
+// };
 
 const wormTitles = {
   raw: 'Raw',
