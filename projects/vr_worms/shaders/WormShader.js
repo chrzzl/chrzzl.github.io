@@ -16,6 +16,7 @@ const WormShader = {
 		'u_renderstyle': { value: 0 },
 		'u_renderthreshold': { value: 0.5 },
 		'u_clim': { value: new Vector2( 1, 1 ) },
+		'u_opacity': { value: 1.0 },
 		'u_data': { value: null },
 		'u_cmdata': { value: null }
 	},
@@ -64,6 +65,7 @@ const WormShader = {
 				uniform int u_renderstyle;
 				uniform float u_renderthreshold;
 				uniform vec2 u_clim;
+				uniform float u_opacity;
 
 				uniform sampler3D u_data;
 				uniform sampler2D u_cmdata;
@@ -134,6 +136,7 @@ const WormShader = {
 
 						// Cast the ray for isosurface rendering
 						cast_iso(start_loc, step, nsteps, view_ray);
+						gl_FragColor.a *= u_opacity;
 
 						if (gl_FragColor.a < 0.05)
 								discard;

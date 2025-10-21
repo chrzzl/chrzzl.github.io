@@ -33,7 +33,7 @@ const volumes = ['raw', 'gt_mask', 'stardist_mask'];
 
 // GUI + data config
 const isoThresholds = {
-  raw: 0.08,
+  raw: 0.09,
   gt_mask: 0.00,
   stardist_mask: 0.00,
 };
@@ -61,11 +61,9 @@ const wormParams = {};
 for (let worm of volumes) {
   wormParams[worm] = {
     threshold: isoThresholds[worm],
-    scale: 1,
-    rotLR: 0,
-    rotUD: 0,
     renderstyle: renderstyles[worm],
     colormap: colormaps[worm],
+    opacity: 1,
   };
 }
 
@@ -194,6 +192,7 @@ function addwormVolume(center, worm, rotateGroup) {
     uniforms['u_data'].value = texture;
     uniforms['u_size'].value.set(sx, sy, sz);
     uniforms['u_clim'].value.set(0, 1);
+    uniforms['u_opacity'].value = wormParams[worm].opacity;
     uniforms['u_renderstyle'].value = wormParams[worm].renderstyle;
     uniforms['u_renderthreshold'].value = wormParams[worm].threshold;
     uniforms['u_cmdata'].value = cmtextures[wormParams[worm].colormap];
@@ -206,7 +205,8 @@ function addwormVolume(center, worm, rotateGroup) {
       uniforms,
       vertexShader: shader.vertexShader,
       fragmentShader: shader.fragmentShader,
-      side: THREE.BackSide
+      side: THREE.BackSide,
+      transparent: true,
     });
     const mesh = new THREE.Mesh(geometry, volumeMaterials[worm]);
     mesh.position.set(-sx / 2, -sy / 2, -sz / 2);
@@ -228,7 +228,7 @@ function addwormVolume(center, worm, rotateGroup) {
     placingGroup.rotation.copy(rotations[worm]);
 
     // Scale
-    const volumescale = wormParams[worm].scale * SCALE_COEFF;
+    const volumescale = transformParams.scale * SCALE_COEFF;
     rotatingGroups[worm].scale.set(volumescale, volumescale, volumescale);
   });
 }
@@ -402,6 +402,15 @@ function setupwormGUIs() {
     .onChange((value) => {
       if (thresholdUniformRefs['raw']) thresholdUniformRefs['raw'].value = value;
     });
+  for (let worm of volumes) {
+    dataGui.add(wormParams[worm], 'opacity', 0, 1, 0.01)
+      .name(`${worm} volume opacity`)
+      .onChange((value) => {
+        if (volumeMaterials[worm] && volumeMaterials[worm].uniforms?.u_opacity) {
+          volumeMaterials[worm].uniforms['u_opacity'].value = value;
+        }
+      });
+  }
   // dataGui.add(wormParams[worm], 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
   //     if (volumeMaterials[worm] && volumeMaterials[worm].uniforms?.u_cmdata) {
   //       volumeMaterials[worm].uniforms['u_cmdata'].value = cmtextures[v];
