@@ -20,7 +20,7 @@ let controller1, controller2;
 let group; // GUI group
 
 // PARAMETERS
-const ROTATIONSPEED = 0.00;
+const ROTATIONSPEED = 0.0;
 const FOV = 90;
 const DISTANCE = 270;
 const HIDEGUI = false;
@@ -66,8 +66,13 @@ for (let worm of volumes) {
     rotUD: 0,
     renderstyle: renderstyles[worm],
     colormap: colormaps[worm],
-    useIsoSurface: 1,
   };
+}
+
+const transformParams = {
+  scale: 1,
+  rotLR: 0,
+  rotUD: 0,
 }
 
 const filePaths = {
@@ -352,14 +357,20 @@ function setupwormGUIs() {
   // Transforms panel
   const transformsGui = new GUI({ width: guiWidth });
   transformsGui.title(`Transforms`);
-  transformsGui.add(wormParams['raw'], 'scale', 1, 3, 0.1).name('Scale').onChange((v) => {
+  transformsGui.add(transformParams, 'scale', 1, 3, 0.1).name('Scale').onChange((v) => {
     rotatingGroups['raw'].scale.set(v*SCALE_COEFF, v*SCALE_COEFF, v*SCALE_COEFF);
+    rotatingGroups['gt_mask'].scale.set(v*SCALE_COEFF, v*SCALE_COEFF, v*SCALE_COEFF);
+    rotatingGroups['stardist_mask'].scale.set(v*SCALE_COEFF, v*SCALE_COEFF, v*SCALE_COEFF);
   });
-  transformsGui.add(wormParams['raw'], 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
-    rotatingGroups['raw'].rotation.y = v * Math.PI / 180;
-  });
-  transformsGui.add(wormParams['raw'], 'rotUD', -180, 180, 1).name('Rotate Up/Down').onChange((v) => {
+  // transformsGui.add(transformParams, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
+  //   rotatingGroups['raw'].rotation.y = v * Math.PI / 180;
+  //   rotatingGroups['gt_mask'].rotation.y = v * Math.PI / 180;
+  //   rotatingGroups['stardist_mask'].rotation.y = v * Math.PI / 180;
+  // });
+  transformsGui.add(transformParams, 'rotUD', -180, 180, 1).name('Rotate Up/Down').onChange((v) => {
     rotatingGroups['raw'].rotation.x = v * Math.PI / 180;
+    rotatingGroups['gt_mask'].rotation.x = v * Math.PI / 180;
+    rotatingGroups['stardist_mask'].rotation.x = v * Math.PI / 180;
   });
   transformsGui.domElement.style.visibility = 'hidden';
   
