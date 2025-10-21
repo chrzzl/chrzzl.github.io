@@ -236,6 +236,9 @@ function addwormVolume(center, worm, rotateGroup) {
     rotatingGroups['raw'].position.y = 1.7 - transformParams.interwormDistance;
     rotatingGroups['gt_mask'].position.y = 1.7;
     rotatingGroups['stardist_mask'].position.y = 1.7 + transformParams.interwormDistance;
+    for (let worm of volumes) {
+      rotatingGroups[worm].position.x += transformParams.leftrightOffset;
+    }
   });
 }
 
@@ -383,7 +386,13 @@ function setupwormGUIs() {
     rotatingGroups['gt_mask'].position.y = 1.7;
     rotatingGroups['stardist_mask'].position.y = 1.7 + v;
   });
+  transformsGui.add(transformParams, 'leftrightOffset', -400, 400, 1).name('Left/Right Offset').onChange((v) => {
+    for (let worm of volumes) {
+      rotatingGroups[worm].position.x = v;
+    }
+  });
   transformsGui.domElement.style.visibility = 'hidden';
+
   
   wormTransformsGuiMesh = new HTMLMesh(transformsGui.domElement);
   const angle = 0;
