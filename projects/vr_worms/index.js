@@ -22,10 +22,11 @@ let group; // GUI group
 // PARAMETERS
 const ROTATIONSPEED = 0.0;
 const FOV = 90;
-const DISTANCE = 270;
+const DISTANCE = 170;
 const HIDEGUI = false;
 const START_worm = 'raw'
 const SCALE_COEFF = 0.5;
+const MAX_INTERWORMDISTANCE = 50;
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 
@@ -68,10 +69,10 @@ for (let worm of volumes) {
 }
 
 const transformParams = {
-  scale: 1,
+  scale: 2,
   rotLR: 0,
   rotUD: 0,
-  interwormDistance: 100,
+  interwormDistance: 1,
   leftrightOffset: 0,
 }
 
@@ -239,9 +240,9 @@ function addwormVolume(center, worm, rotateGroup) {
     rotatingGroups[worm].scale.set(volumescale, volumescale, volumescale);
 
     // Offset
-    rotatingGroups['raw'].position.y = 1.7 - transformParams.interwormDistance;
+    rotatingGroups['raw'].position.y = 1.7 - transformParams.interwormDistance*MAX_INTERWORMDISTANCE;
     rotatingGroups['gt_mask'].position.y = 1.7;
-    rotatingGroups['stardist_mask'].position.y = 1.7 + transformParams.interwormDistance;
+    rotatingGroups['stardist_mask'].position.y = 1.7 + transformParams.interwormDistance*MAX_INTERWORMDISTANCE;
     for (let worm of volumes) {
       rotatingGroups[worm].position.x += transformParams.leftrightOffset;
     }
@@ -354,9 +355,9 @@ function setupEnvironmentLighting() {
 
 function setupwormGUIs() {
   const offset = 0.75;
-  const guiDistance = 3.5;
+  const guiDistance = 2;
   const guiScale = 6.0;
-  const guiHeight = -0.5;
+  const guiHeight = 0.5;
   const guiWidth = 250;
 
   if (!group) {
@@ -387,10 +388,10 @@ function setupwormGUIs() {
     rotatingGroups['gt_mask'].rotation.x = v * Math.PI / 180;
     rotatingGroups['stardist_mask'].rotation.x = v * Math.PI / 180;
   });
-  transformsGui.add(transformParams, 'interwormDistance', 0, 100, 1).name('Interworm Distance').onChange((v) => {
-    rotatingGroups['raw'].position.y = 1.7 - v;
+  transformsGui.add(transformParams, 'interwormDistance', 0, 1, 1/MAX_INTERWORMDISTANCE).name('Interworm Distance').onChange((v) => {
+    rotatingGroups['raw'].position.y = 1.7 - v*MAX_INTERWORMDISTANCE;
     rotatingGroups['gt_mask'].position.y = 1.7;
-    rotatingGroups['stardist_mask'].position.y = 1.7 + v;
+    rotatingGroups['stardist_mask'].position.y = 1.7 + v*MAX_INTERWORMDISTANCE;
   });
   transformsGui.add(transformParams, 'leftrightOffset', -400, 400, 1).name('Left/Right Offset').onChange((v) => {
     for (let worm of volumes) {
