@@ -80,7 +80,7 @@ const VolumeRenderShader1 = {
 				const vec4 ambient_color = vec4(0.2, 0.4, 0.2, 1.0);
 				const vec4 diffuse_color = vec4(0.8, 0.2, 0.2, 1.0);
 				const vec4 specular_color = vec4(1.0, 1.0, 1.0, 1.0);
-				const float shininess = 40.0;
+				const float shininess = 600.0;
 
 				void cast_mip(vec3 start_loc, vec3 step, int nsteps, vec3 view_ray);
 				void cast_iso(vec3 start_loc, vec3 step, int nsteps, vec3 view_ray);
@@ -229,69 +229,49 @@ const VolumeRenderShader1 = {
 				}
 
 
-				vec4 add_lighting(float val, vec3 loc, vec3 step, vec3 view_ray)
-				{
-					// Calculate color by incorporating lighting
+				vec4 add_lighting(float val, vec3 loc, vec3 step, vec3 view_ray) {
+					// View direction
+					vec3 V = normalize(view_ray);
 
-						// View direction
-						vec3 V = normalize(view_ray);
+					// Central differences with 6 samples (same stencil as before)
+					vec3 gx = vec3(step.x, 0.0, 0.0);
+					vec3 gy = vec3(0.0, step.y, 0.0);
+					vec3 gz = vec3(0.0, 0.0, step.z);
 
-						// calculate normal vector from gradient
-						vec3 N;
-						float val1, val2;
-						val1 = sample1(loc + vec3(-step[0], 0.0, 0.0));
-						val2 = sample1(loc + vec3(+step[0], 0.0, 0.0));
-						N[0] = val1 - val2;
-						val = max(max(val1, val2), val);
-						val1 = sample1(loc + vec3(0.0, -step[1], 0.0));
-						val2 = sample1(loc + vec3(0.0, +step[1], 0.0));
-						N[1] = val1 - val2;
-						val = max(max(val1, val2), val);
-						val1 = sample1(loc + vec3(0.0, 0.0, -step[2]));
-						val2 = sample1(loc + vec3(0.0, 0.0, +step[2]));
-						N[2] = val1 - val2;
-						val = max(max(val1, val2), val);
+					float sx1 = sample1(loc - gx);
+					float sx2 = sample1(loc + gx);
+					float sy1 = sample1(loc - gy);
+					float sy2 = sample1(loc + gy);
+					float sz1 = sample1(loc - gz);
+					float sz2 = sample1(loc + gz);
 
-						float gm = length(N); // gradient magnitude
-						N = normalize(N);
+					// Gradient
+					vec3 N = vec3(sx1 - sx2, sy1 - sy2, sz1 - sz2);
+					N = normalize(N);
 
-						// Flip normal so it points towards viewer
-						float Nselect = float(dot(N, V) > 0.0);
-						N = (2.0 * Nselect - 1.0) * N;	// ==	Nselect * N - (1.0-Nselect)*N;
+					// Preserve your intensity modulation exactly:
+					// val = max( max(val, max(sx1,sx2)), max(max(sy1,sy2), max(sz1,sz2)) )
+					float vmax_xy = max(max(sx1, sx2), max(sy1, sy2));
+					float vmax_xyz = max(vmax_xy, max(sz1, sz2));
+					val = max(val, vmax_xyz);
 
-						// Init colors
-						vec4 ambient_color = vec4(0.0, 0.0, 0.0, 0.0);
-						vec4 diffuse_color = vec4(0.0, 0.0, 0.0, 0.0);
-						vec4 specular_color = vec4(0.0, 0.0, 0.0, 0.0);
+					// Flip normal so it points toward viewer (correct condition)
+					if (dot(N, V) < 0.0) N = -N;
 
-						// note: could allow multiple lights
-						for (int i=0; i<1; i++)
-						{
-								 // Get light direction (make sure to prevent zero devision)
-								vec3 L = normalize(view_ray);	//lightDirs[i];
-								float lightEnabled = float( length(L) > 0.0 );
-								L = normalize(L + (1.0 - lightEnabled));
+					// Single light equal to your loop i<1
+					vec3 L = normalize(view_ray);
+					float lambertTerm  = max(dot(N, L), 0.0);
+					vec3 H             = normalize(L + V);
+					float specularTerm = pow(max(dot(H, N), 0.0), shininess);
 
-								// Calculate lighting properties
-								float lambertTerm = clamp(dot(N, L), 0.0, 1.0);
-								vec3 H = normalize(L+V); // Halfway vector
-								float specularTerm = pow(max(dot(H, N), 0.0), shininess);
+					// Compose with same globals
+					vec4 color = apply_colormap(val);
+					vec4 final_color =
+						color * (ambient_color + diffuse_color * lambertTerm) +
+						specular_color * specularTerm;
 
-								// Calculate mask
-								float mask1 = lightEnabled;
-
-								// Calculate colors
-								ambient_color +=	mask1 * ambient_color;	// * gl_LightSource[i].ambient;
-								diffuse_color +=	mask1 * lambertTerm;
-								specular_color += mask1 * specularTerm * specular_color;
-						}
-
-						// Calculate final color by componing different components
-						vec4 final_color;
-						vec4 color = apply_colormap(val);
-						final_color = color * (ambient_color + diffuse_color) + specular_color;
-						final_color.a = color.a;
-						return final_color;
+					final_color.a = color.a;
+					return final_color;
 				}`
 
 };
