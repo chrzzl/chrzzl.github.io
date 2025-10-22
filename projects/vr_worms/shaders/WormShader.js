@@ -17,6 +17,7 @@ const WormShader = {
 		'u_renderthreshold': { value: 0.5 },
 		'u_clim': { value: new Vector2( 1, 1 ) },
 		'u_opacity': { value: 1.0 },
+		'u_cuttingthreshold': { value: 0.0 },
 		'u_data': { value: null },
 		'u_cmdata': { value: null }
 	},
@@ -66,6 +67,7 @@ const WormShader = {
 				uniform float u_renderthreshold;
 				uniform vec2 u_clim;
 				uniform float u_opacity;
+				uniform float u_cuttingthreshold;
 
 				uniform sampler3D u_data;
 				uniform sampler2D u_cmdata;
@@ -187,6 +189,15 @@ const WormShader = {
 						for (int iter=0; iter<MAX_STEPS; iter++) {
 								if (iter >= nsteps)
 										break;
+
+								vec3 plane_point = vec3(1.0 - u_cuttingthreshold, 1.0, 1.0);  // Point on the cutting plane
+								vec3 plane_normal = normalize(vec3(-1.0, 0.0, 0.0));  // Normal vector of the cutting plane (should be normalized)
+
+								float plane_dist = dot(loc - plane_point, plane_normal);
+								if (plane_dist < 0.0) {
+									loc += step;
+									continue;  // skip samples on the "cut" side
+								}
 
 								// Sample from the 3D texture
 								float val = sample1(loc);

@@ -24,9 +24,9 @@ const ROTATIONSPEED = 0.0;
 const FOV = 90;
 const DISTANCE = 170;
 const HIDEGUI = false;
-const START_worm = 'raw'
-const SCALE_COEFF = 0.5;
+const START_worm = 'raw';
 const MAX_INTERWORMDISTANCE = 50;
+const SCALE_COEFF = 0.5;
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 
@@ -74,6 +74,7 @@ const transformParams = {
   rotUD: 0,
   interwormDistance: 1,
   leftrightOffset: 0,
+  cuttingThreshold: 0,
 }
 
 const filePaths = {
@@ -141,7 +142,7 @@ function init() {
 
   // Add credits
   setupCredits(renderer);
-  
+
   // On window resize
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -204,6 +205,7 @@ function addwormVolume(center, worm, rotateGroup) {
     uniforms['u_renderstyle'].value = wormParams[worm].renderstyle;
     uniforms['u_renderthreshold'].value = wormParams[worm].threshold;
     uniforms['u_cmdata'].value = cmtextures[wormParams[worm].colormap];
+    uniforms['u_cuttingthreshold'].value = wormParams[worm].cuttingThreshold;
 
     thresholdUniformRefs[worm] = uniforms['u_renderthreshold'];
 
@@ -276,7 +278,7 @@ function addCylindricalFloor(scene, radius, height, radialSegments, gridLines) {
 
     // 2. Grid circle on top face (white edges)
     const num_circles = 5;
-    for (let i = 1; i < num_circles+1; i++) {
+    for (let i = 1; i < num_circles + 1; i++) {
       const circleGeometry = new THREE.CircleGeometry(i * radius / num_circles, radialSegments);
       circleGeometry.rotateX(-Math.PI / 2); // face up
       const circleEdges = new THREE.EdgesGeometry(circleGeometry);
@@ -374,9 +376,9 @@ function setupwormGUIs() {
   const transformsGui = new GUI({ width: guiWidth });
   transformsGui.title(`Transforms`);
   transformsGui.add(transformParams, 'scale', 1, 3, 0.1).name('Scale').onChange((v) => {
-    rotatingGroups['raw'].scale.set(v*SCALE_COEFF, v*SCALE_COEFF, v*SCALE_COEFF);
-    rotatingGroups['gt_mask'].scale.set(v*SCALE_COEFF, v*SCALE_COEFF, v*SCALE_COEFF);
-    rotatingGroups['stardist_mask'].scale.set(v*SCALE_COEFF, v*SCALE_COEFF, v*SCALE_COEFF);
+    rotatingGroups['raw'].scale.set(v * SCALE_COEFF, v * SCALE_COEFF, v * SCALE_COEFF);
+    rotatingGroups['gt_mask'].scale.set(v * SCALE_COEFF, v * SCALE_COEFF, v * SCALE_COEFF);
+    rotatingGroups['stardist_mask'].scale.set(v * SCALE_COEFF, v * SCALE_COEFF, v * SCALE_COEFF);
   });
   // transformsGui.add(transformParams, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
   //   rotatingGroups['raw'].rotation.y = v * Math.PI / 180;
@@ -400,7 +402,7 @@ function setupwormGUIs() {
   });
   transformsGui.domElement.style.visibility = 'hidden';
 
-  
+
   wormTransformsGuiMesh = new HTMLMesh(transformsGui.domElement);
   const angle = 0;
   const position = new THREE.Vector3(0, guiHeight, 0);
@@ -412,7 +414,7 @@ function setupwormGUIs() {
   const wormTransformsOffset = localX.applyQuaternion(wormTransformsGuiMesh.quaternion).multiplyScalar(offset);
   wormTransformsGuiMesh.position.add(wormTransformsOffset);
   wormTransformsGuiMesh.scale.setScalar(guiScale);
-  
+
   // Data panel
   const dataGui = new GUI({ width: guiWidth });
   dataGui.title(`Visualization`);
@@ -424,10 +426,14 @@ function setupwormGUIs() {
   //       volumeMaterials[worm].uniforms['u_renderstyle'].value = v ? 1 : 0;
   //     }
   //   });
-  dataGui.add(wormParams['raw'], 'threshold', 0, 1, 0.01)
-    .name('Isosurf. Threshold')
+  dataGui.add(transformParams, 'cuttingThreshold', 0, 1, 0.01)
+    .name('Cutting Plane')
     .onChange((value) => {
-      if (thresholdUniformRefs['raw']) thresholdUniformRefs['raw'].value = value;
+      for (let worm of volumes) {
+        if (volumeMaterials[worm] && volumeMaterials[worm].uniforms?.u_cuttingthreshold) {
+          volumeMaterials[worm].uniforms['u_cuttingthreshold'].value = value;
+        }
+      }
     });
   for (let worm of volumes) {
     dataGui.add(wormParams[worm], 'opacity', 0, 1, 0.01)
@@ -438,6 +444,11 @@ function setupwormGUIs() {
         }
       });
   }
+  dataGui.add(wormParams['raw'], 'threshold', 0, 1, 0.01)
+    .name('Isosurf. Threshold')
+    .onChange((value) => {
+      if (thresholdUniformRefs['raw']) thresholdUniformRefs['raw'].value = value;
+    });
   // dataGui.add(wormParams[worm], 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
   //     if (volumeMaterials[worm] && volumeMaterials[worm].uniforms?.u_cmdata) {
   //       volumeMaterials[worm].uniforms['u_cmdata'].value = cmtextures[v];
@@ -454,12 +465,12 @@ function setupwormGUIs() {
   const localX2 = new THREE.Vector3(-1, 0, 0); // local x direction
   const wormDataOffset = localX2.applyQuaternion(wormDataGuiMesh.quaternion).multiplyScalar(offset);
   wormDataGuiMesh.position.add(wormDataOffset);
-  wormDataGuiMesh.scale.setScalar(guiScale); 
+  wormDataGuiMesh.scale.setScalar(guiScale);
 
   // Add to interactive group
   group.add(wormTransformsGuiMesh);
   group.add(wormDataGuiMesh);
-  
+
   if (HIDEGUI) {
     wormTransformsGuiMesh.visible = false;
     wormDataGuiMesh.visible = false;
@@ -486,7 +497,7 @@ function setupXRButton() {
 
 function setupControllers() {
   const geometry = new THREE.BufferGeometry()
-    .setFromPoints([ new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-5) ]);
+    .setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -5)]);
 
   controller1 = renderer.xr.getController(0);
   controller1.add(new THREE.Line(geometry));
