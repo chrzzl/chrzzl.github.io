@@ -444,7 +444,7 @@ function setupwormGUIs() {
         }
       });
   }
-  dataGui.add(wormParams['raw'], 'threshold', 0, 1, 0.01)
+  dataGui.add(wormParams['raw'], 'threshold', 0, 0.6, 0.01)
     .name('Isosurf. Threshold')
     .onChange((value) => {
       if (thresholdUniformRefs['raw']) thresholdUniformRefs['raw'].value = value;
