@@ -40,15 +40,16 @@ const isoThresholds = {
 
 const colormaps = {
   raw: 3,
-  gt_mask: 5,
+  gt_mask: 1,
   stardist_mask: 5,
 };
 
 // NOTE: 0 = raw, 1 = fg_bg, 2 = instances
+// default render styles (masks use fg/bg by default)
 const renderstyles = {
   raw: 0,
-  gt_mask: 2,
-  stardist_mask: 2,
+  gt_mask: 1,
+  stardist_mask: 1,
 };
 
 const scales = {
@@ -80,6 +81,7 @@ const transformParams = {
   interwormDistance: 1,
   leftrightOffset: 0,
   cuttingThreshold: 0,
+  showInstanceSeg: 0, // toggle FG-BG <> instances for mask volumes
 }
 
 const filePaths = {
@@ -392,6 +394,17 @@ function setupwormGUIs() {
       rotatingGroups[worm].scale.set(v * scales[worm], v * scales[worm], v * scales[worm]);
     }
   });
+  transformsGui.add(transformParams, 'showInstanceSeg', 0, 1, 1).name('FG-BF <> Instances').onChange((v) => {
+    // update both mask materials when toggled
+    if (volumeMaterials['gt_mask'] && volumeMaterials['gt_mask'].uniforms?.u_renderstyle !== undefined) {
+      volumeMaterials['gt_mask'].uniforms['u_renderstyle'].value = v ? 2 : 1;
+      volumeMaterials['gt_mask'].uniforms['u_cmdata'].value = v ? cmtextures[5] : cmtextures[1];
+    }
+    if (volumeMaterials['stardist_mask'] && volumeMaterials['stardist_mask'].uniforms?.u_renderstyle !== undefined) {
+      volumeMaterials['stardist_mask'].uniforms['u_renderstyle'].value = v ? 2 : 1;
+      volumeMaterials['stardist_mask'].uniforms['u_cmdata'].value = v ? cmtextures[5] : cmtextures[1];
+    }
+  });
   // transformsGui.add(transformParams, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
   //   rotatingGroups['raw'].rotation.y = v * Math.PI / 180;
   //   rotatingGroups['gt_mask'].rotation.y = v * Math.PI / 180;
@@ -402,7 +415,7 @@ function setupwormGUIs() {
     rotatingGroups['gt_mask'].rotation.x = v * Math.PI / 180;
     rotatingGroups['stardist_mask'].rotation.x = v * Math.PI / 180;
   });
-  transformsGui.add(transformParams, 'interwormDistance', 0, 1, 1/MAX_INTERWORMDISTANCE).name('Interworm Distance').onChange((v) => {
+  transformsGui.add(transformParams, 'interwormDistance', 0, 1, 0.01).name('Interworm Distance').onChange((v) => {
     rotatingGroups['raw'].position.y = 1.7 - v*MAX_INTERWORMDISTANCE;
     rotatingGroups['gt_mask'].position.y = 1.7;
     rotatingGroups['stardist_mask'].position.y = 1.7 + v*MAX_INTERWORMDISTANCE;
