@@ -14,7 +14,7 @@ let rotatingGroups = {};
 let centers = {};
 let thresholdUniformRefs = {};
 let volumeMaterials = {};
-let wormTransformsGuiMesh, wormDataGuiMesh;
+let wormTransformsGuiMesh, wormDataGuiMesh, wormTransparencyGuiMesh;
 let wormTitleMesh;
 let controller1, controller2;
 let group; // GUI group
@@ -168,6 +168,7 @@ function animate() {
       // Update the GUIs
       if (wormTransformsGuiMesh) wormTransformsGuiMesh.material.map.update();
       if (wormDataGuiMesh) wormDataGuiMesh.material.map.update();
+      if (wormTransparencyGuiMesh) wormTransparencyGuiMesh.material.map.update();
     }
     renderer.render(scene, camera);
   });
@@ -370,7 +371,7 @@ function setupEnvironmentLighting() {
 // =======================================
 
 function setupwormGUIs() {
-  const offset = 0.75;
+  const offset = 1.5;
   const guiDistance = 2;
   const guiScale = 6.0;
   const guiHeight = 0.5;
@@ -386,64 +387,10 @@ function setupwormGUIs() {
     if (controller2) group.listenToXRControllerEvents(controller2);
   }
 
-  // Transforms panel
-  const transformsGui = new GUI({ width: guiWidth });
-  transformsGui.title(`Transforms`);
-  transformsGui.add(transformParams, 'scale', 0.5, 2, 0.1).name('Scale').onChange((v) => {
-    for (let worm of volumes) {
-      rotatingGroups[worm].scale.set(v * scales[worm], v * scales[worm], v * scales[worm]);
-    }
-  });
-  transformsGui.add(transformParams, 'showInstanceSeg', 0, 1, 1).name('FG-BF <> Instances').onChange((v) => {
-    // update both mask materials when toggled
-    if (volumeMaterials['gt_mask'] && volumeMaterials['gt_mask'].uniforms?.u_renderstyle !== undefined) {
-      volumeMaterials['gt_mask'].uniforms['u_renderstyle'].value = v ? 2 : 1;
-      volumeMaterials['gt_mask'].uniforms['u_cmdata'].value = v ? cmtextures[5] : cmtextures[1];
-    }
-    if (volumeMaterials['stardist_mask'] && volumeMaterials['stardist_mask'].uniforms?.u_renderstyle !== undefined) {
-      volumeMaterials['stardist_mask'].uniforms['u_renderstyle'].value = v ? 2 : 1;
-      volumeMaterials['stardist_mask'].uniforms['u_cmdata'].value = v ? cmtextures[5] : cmtextures[1];
-    }
-  });
-  // transformsGui.add(transformParams, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
-  //   rotatingGroups['raw'].rotation.y = v * Math.PI / 180;
-  //   rotatingGroups['gt_mask'].rotation.y = v * Math.PI / 180;
-  //   rotatingGroups['stardist_mask'].rotation.y = v * Math.PI / 180;
-  // });
-  transformsGui.add(transformParams, 'rotUD', -180, 180, 1).name('Rotate Up/Down').onChange((v) => {
-    rotatingGroups['raw'].rotation.x = v * Math.PI / 180;
-    rotatingGroups['gt_mask'].rotation.x = v * Math.PI / 180;
-    rotatingGroups['stardist_mask'].rotation.x = v * Math.PI / 180;
-  });
-  transformsGui.add(transformParams, 'interwormDistance', 0, 1, 0.01).name('Interworm Distance').onChange((v) => {
-    rotatingGroups['raw'].position.y = 1.7 - v*MAX_INTERWORMDISTANCE;
-    rotatingGroups['gt_mask'].position.y = 1.7;
-    rotatingGroups['stardist_mask'].position.y = 1.7 + v*MAX_INTERWORMDISTANCE;
-  });
-  transformsGui.add(transformParams, 'leftrightOffset', -400, 400, 1).name('Left/Right Offset').onChange((v) => {
-    for (let worm of volumes) {
-      rotatingGroups[worm].position.x = v;
-    }
-  });
-  transformsGui.domElement.style.visibility = 'hidden';
-
-
-  wormTransformsGuiMesh = new HTMLMesh(transformsGui.domElement);
-  const angle = 0;
-  const position = new THREE.Vector3(0, guiHeight, 0);
-  position.x += Math.sin(angle) * guiDistance;
-  position.z -= Math.cos(angle) * guiDistance;
-  wormTransformsGuiMesh.position.copy(position);
-  wormTransformsGuiMesh.lookAt(vrPosition);
-  const localX = new THREE.Vector3(1, 0, 0); // local x direction
-  const wormTransformsOffset = localX.applyQuaternion(wormTransformsGuiMesh.quaternion).multiplyScalar(offset);
-  wormTransformsGuiMesh.position.add(wormTransformsOffset);
-  wormTransformsGuiMesh.scale.setScalar(guiScale);
 
   // Data panel
   const dataGui = new GUI({ width: guiWidth });
-  dataGui.title(`Visualization`);
-
+  dataGui.title(`Data paarameters`);
   // dataGui.add(wormParams['raw'], 'useIsoSurface', 0, 1, 1)
   //   .name('MIP <> Isosurface')
   //   .onChange((v) => {
@@ -460,45 +407,113 @@ function setupwormGUIs() {
         }
       }
     });
+  dataGui.add(wormParams['raw'], 'threshold', 0, 0.6, 0.01)
+    .name('Isosurf. Threshold')
+    .onChange((value) => {
+      if (thresholdUniformRefs['raw']) thresholdUniformRefs['raw'].value = value;
+    });
+  dataGui.add(transformParams, 'interwormDistance', 0, 1, 0.01).name('Interworm Distance').onChange((v) => {
+    rotatingGroups['raw'].position.y = 1.7 - v*MAX_INTERWORMDISTANCE;
+    rotatingGroups['gt_mask'].position.y = 1.7;
+    rotatingGroups['stardist_mask'].position.y = 1.7 + v*MAX_INTERWORMDISTANCE;
+  });
+  dataGui.add(transformParams, 'showInstanceSeg', 0, 1, 1).name('FG-BF <> Instances').onChange((v) => {
+    // update both mask materials when toggled
+    if (volumeMaterials['gt_mask'] && volumeMaterials['gt_mask'].uniforms?.u_renderstyle !== undefined) {
+      volumeMaterials['gt_mask'].uniforms['u_renderstyle'].value = v ? 2 : 1;
+      volumeMaterials['gt_mask'].uniforms['u_cmdata'].value = v ? cmtextures[5] : cmtextures[1];
+    }
+    if (volumeMaterials['stardist_mask'] && volumeMaterials['stardist_mask'].uniforms?.u_renderstyle !== undefined) {
+      volumeMaterials['stardist_mask'].uniforms['u_renderstyle'].value = v ? 2 : 1;
+    }
+  });
+  dataGui.domElement.style.visibility = 'hidden';
+
+
+  // Transforms panel
+  const transformsGui = new GUI({ width: guiWidth });
+  transformsGui.title(`Transforms`);
+  transformsGui.add(transformParams, 'scale', 0.5, 2, 0.1).name('Scale').onChange((v) => {
+    for (let worm of volumes) {
+      rotatingGroups[worm].scale.set(v * scales[worm], v * scales[worm], v * scales[worm]);
+    }
+  });
+  // transformsGui.add(transformParams, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
+  //   rotatingGroups['raw'].rotation.y = v * Math.PI / 180;
+  //   rotatingGroups['gt_mask'].rotation.y = v * Math.PI / 180;
+  //   rotatingGroups['stardist_mask'].rotation.y = v * Math.PI / 180;
+  // });
+  transformsGui.add(transformParams, 'rotUD', -180, 180, 1).name('Rotate Up/Down').onChange((v) => {
+    rotatingGroups['raw'].rotation.x = v * Math.PI / 180;
+    rotatingGroups['gt_mask'].rotation.x = v * Math.PI / 180;
+    rotatingGroups['stardist_mask'].rotation.x = v * Math.PI / 180;
+  });
+  transformsGui.add(transformParams, 'leftrightOffset', -400, 400, 1).name('Left/Right Offset').onChange((v) => {
+    for (let worm of volumes) {
+      rotatingGroups[worm].position.x = v;
+    }
+  });
+  transformsGui.domElement.style.visibility = 'hidden';
+
+  
+  // Transparency panel
+  const transparencyGui = new GUI({ width: guiWidth });
+  transparencyGui.title(`Volume Transparency`);
   for (let worm of volumes) {
-    dataGui.add(wormParams[worm], 'opacity', 0, 1, 0.01)
-      .name(`${worm} volume opacity`)
+    transparencyGui.add(wormParams[worm], 'opacity', 0, 1, 0.01)
+      .name(`${worm}`)
       .onChange((value) => {
         if (volumeMaterials[worm] && volumeMaterials[worm].uniforms?.u_opacity) {
           volumeMaterials[worm].uniforms['u_opacity'].value = value;
         }
       });
   }
-  dataGui.add(wormParams['raw'], 'threshold', 0, 0.6, 0.01)
-    .name('Isosurf. Threshold')
-    .onChange((value) => {
-      if (thresholdUniformRefs['raw']) thresholdUniformRefs['raw'].value = value;
-    });
-  // dataGui.add(wormParams[worm], 'colormap', 1, 4, 1).name('Colormap').onChange((v) => {
-  //     if (volumeMaterials[worm] && volumeMaterials[worm].uniforms?.u_cmdata) {
-  //       volumeMaterials[worm].uniforms['u_cmdata'].value = cmtextures[v];
-  //     }
-  // });
-  dataGui.domElement.style.visibility = 'hidden';
+  transparencyGui.domElement.style.visibility = 'hidden';
 
+
+  wormTransformsGuiMesh = new HTMLMesh(transformsGui.domElement);
+  const angle = 0;
+  const position = new THREE.Vector3(0, guiHeight, 0);
+  position.z -= guiDistance;
+  wormTransformsGuiMesh.position.copy(position);
+  wormTransformsGuiMesh.lookAt(vrPosition);
+  const localX = new THREE.Vector3(1, 0, 0); // local x direction
+  const wormTransformsOffset = localX.applyQuaternion(wormTransformsGuiMesh.quaternion).multiplyScalar(offset);
+  wormTransformsGuiMesh.position.add(wormTransformsOffset);
+  wormTransformsGuiMesh.scale.setScalar(guiScale);
+
+  
   wormDataGuiMesh = new HTMLMesh(dataGui.domElement);
   const position2 = new THREE.Vector3(0, guiHeight, 0);
-  position2.x += Math.sin(angle) * guiDistance;
-  position2.z -= Math.cos(angle) * guiDistance;
+  position2.z -= guiDistance;
   wormDataGuiMesh.position.copy(position2);
   wormDataGuiMesh.lookAt(vrPosition);
   const localX2 = new THREE.Vector3(-1, 0, 0); // local x direction
-  const wormDataOffset = localX2.applyQuaternion(wormDataGuiMesh.quaternion).multiplyScalar(offset);
+  const wormDataOffset = localX2.applyQuaternion(wormDataGuiMesh.quaternion).multiplyScalar(0);
   wormDataGuiMesh.position.add(wormDataOffset);
   wormDataGuiMesh.scale.setScalar(guiScale);
 
+
+  wormTransparencyGuiMesh = new HTMLMesh(transparencyGui.domElement);
+  const position3 = new THREE.Vector3(0, guiHeight, 0);
+  position3.z -= guiDistance;
+  wormTransparencyGuiMesh.position.copy(position3);
+  wormTransparencyGuiMesh.lookAt(vrPosition);
+  const localX3 = new THREE.Vector3(-1, 0, 0); // local x direction
+  const wormTransparencyOffset = localX3.applyQuaternion(wormTransparencyGuiMesh.quaternion).multiplyScalar(offset);
+  wormTransparencyGuiMesh.position.add(wormTransparencyOffset);
+  wormTransparencyGuiMesh.scale.setScalar(guiScale);
+
+
   // Add to interactive group
-  group.add(wormTransformsGuiMesh);
   group.add(wormDataGuiMesh);
+  group.add(wormTransformsGuiMesh);
+  group.add(wormTransparencyGuiMesh);
 
   if (HIDEGUI) {
     wormTransformsGuiMesh.visible = false;
     wormDataGuiMesh.visible = false;
+    wormTransparencyGuiMesh.visible = false;
   }
 }
 
