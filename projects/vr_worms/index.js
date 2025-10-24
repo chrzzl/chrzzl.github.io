@@ -25,8 +25,7 @@ const FOV = 90;
 const DISTANCE = 170;
 const HIDEGUI = false;
 const START_worm = 'raw';
-const MAX_INTERWORMDISTANCE = 50;
-const SCALE_COEFF = 0.5;
+const MAX_INTERWORMDISTANCE = 60;
 
 const vrPosition = new THREE.Vector3(0, 1.7, 0);
 
@@ -41,8 +40,8 @@ const isoThresholds = {
 
 const colormaps = {
   raw: 3,
-  gt_mask: 1,
-  stardist_mask: 1,
+  gt_mask: 5,
+  stardist_mask: 5,
 };
 
 // NOTE: 0 = raw, 1 = fg_bg, 2 = instances
@@ -50,6 +49,12 @@ const renderstyles = {
   raw: 0,
   gt_mask: 2,
   stardist_mask: 2,
+};
+
+const scales = {
+  raw: 1, // NOTE: Currently raw is too large in memory but masks are too smal for nearest filtering. hence this difference in scaling.
+  gt_mask: 0.5,
+  stardist_mask: 0.5,
 };
 
 const rotations = {
@@ -69,7 +74,7 @@ for (let worm of volumes) {
 }
 
 const transformParams = {
-  scale: 2,
+  scale: 1,
   rotLR: 0,
   rotUD: 0,
   interwormDistance: 1,
@@ -78,9 +83,9 @@ const transformParams = {
 }
 
 const filePaths = {
-  raw: '../../data/worms/raw_0_40.nrrd',
-  gt_mask: '../../data/worms/mask_0_40.nrrd',
-  stardist_mask: '../../data/worms/stardist_mask_0_40.nrrd',
+  raw: '../../data/worms/raw_0_50.nrrd',
+  gt_mask: '../../data/worms/mask.nrrd',
+  stardist_mask: '../../data/worms/stardist_mask.nrrd',
 };
 // NOTE: In case original resolution is desired, use:
 // const filePaths = {
@@ -96,6 +101,7 @@ const wormTitles = {
 };
 
 const cmtextures = {
+  5: new THREE.TextureLoader().load('textures/cm_random_hue.png'),
   4: new THREE.TextureLoader().load('textures/cm_viridis.png'),
   3: new THREE.TextureLoader().load('textures/cm_plasma.png'),
   2: new THREE.TextureLoader().load('textures/cm_inferno.png'),
@@ -192,7 +198,12 @@ function addwormVolume(center, worm, rotateGroup) {
     const texture = new THREE.Data3DTexture(volume.data, sx, sy, sz);
     texture.format = THREE.RedFormat;
     texture.type = THREE.FloatType;
-    texture.minFilter = texture.magFilter = THREE.LinearFilter;
+
+    let filter_mode = THREE.LinearFilter;
+    if (wormParams[worm].renderstyle != 0) {
+      filter_mode = THREE.NearestFilter;
+    }
+    texture.minFilter = texture.magFilter = filter_mode;
     texture.unpackAlignment = 1;
     texture.needsUpdate = true;
 
@@ -238,10 +249,11 @@ function addwormVolume(center, worm, rotateGroup) {
     placingGroup.rotation.copy(rotations[worm]);
 
     // Scale
-    const volumescale = transformParams.scale * SCALE_COEFF;
+    const volumescale = scales[worm] * transformParams.scale;
     rotatingGroups[worm].scale.set(volumescale, volumescale, volumescale);
 
     // Offset
+    // TODO: Fix to only set position per worm once using an offset var.
     rotatingGroups['raw'].position.y = 1.7 - transformParams.interwormDistance*MAX_INTERWORMDISTANCE;
     rotatingGroups['gt_mask'].position.y = 1.7;
     rotatingGroups['stardist_mask'].position.y = 1.7 + transformParams.interwormDistance*MAX_INTERWORMDISTANCE;
@@ -375,10 +387,10 @@ function setupwormGUIs() {
   // Transforms panel
   const transformsGui = new GUI({ width: guiWidth });
   transformsGui.title(`Transforms`);
-  transformsGui.add(transformParams, 'scale', 1, 3, 0.1).name('Scale').onChange((v) => {
-    rotatingGroups['raw'].scale.set(v * SCALE_COEFF, v * SCALE_COEFF, v * SCALE_COEFF);
-    rotatingGroups['gt_mask'].scale.set(v * SCALE_COEFF, v * SCALE_COEFF, v * SCALE_COEFF);
-    rotatingGroups['stardist_mask'].scale.set(v * SCALE_COEFF, v * SCALE_COEFF, v * SCALE_COEFF);
+  transformsGui.add(transformParams, 'scale', 0.5, 2, 0.1).name('Scale').onChange((v) => {
+    for (let worm of volumes) {
+      rotatingGroups[worm].scale.set(v * scales[worm], v * scales[worm], v * scales[worm]);
+    }
   });
   // transformsGui.add(transformParams, 'rotLR', -180, 180, 1).name('Rotate Left/Right').onChange((v) => {
   //   rotatingGroups['raw'].rotation.y = v * Math.PI / 180;
