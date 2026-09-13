@@ -47,7 +47,7 @@ export const WORLD = {
 // ----------------------------------------------------------------------------
 export const PLAYER = {
   // Camera height above the floor, in world units.
-  eyeHeight: 1.7,
+  eyeHeight: 1.5,
 
   // Walking speed in world units per second, and the multiplier applied while
   // Shift is held.
@@ -162,7 +162,7 @@ export const COLORS = {
   tiles: ['#d94a4a', '#4ad97a', '#4a7ad9'],
 
   // The singularity columns.
-  singularity: '#9e9ea3',
+  singularity: '#888888',
 };
 
 // ----------------------------------------------------------------------------
@@ -193,7 +193,7 @@ export const TEXTURES = {
       'textures/rgb_tile_1.png',
       'textures/rgb_tile_2.png',
     ],
-    chess: [
+    checkered: [
       'textures/chess_tile_0.png',
       'textures/chess_tile_1.png',
       'textures/chess_tile_2.png',
@@ -202,16 +202,6 @@ export const TEXTURES = {
       'textures/colored_squares_0.png',
       'textures/colored_squares_1.png',
       'textures/colored_squares_2.png',
-    ],
-    stripes: [
-      'textures/diagonal_stripes_0.png',
-      'textures/diagonal_stripes_1.png',
-      'textures/diagonal_stripes_2.png',
-    ],
-    kariert: [
-      'textures/kariert_0.png',
-      'textures/kariert_1.png',
-      'textures/kariert_2.png',
     ],
     // Quarter-circles in each corner, each divided into hue wedges. Because
     // all four corners of a tile are the SAME cone point, this is the set to
@@ -222,10 +212,20 @@ export const TEXTURES = {
       'textures/singularity_circle_1.png',
       'textures/singularity_circle_2.png',
     ],
+    stripes: [
+      'textures/diagonal_stripes_0.png',
+      'textures/diagonal_stripes_1.png',
+      'textures/diagonal_stripes_2.png',
+    ],
     swirl: [
       'textures/swirl_0.png',
       'textures/swirl_1.png',
       'textures/swirl_2.png',
+    ],
+    crossings: [
+      'textures/kariert_0.png',
+      'textures/kariert_1.png',
+      'textures/kariert_2.png',
     ],
     circles: [
       'textures/circles_0.png',
@@ -235,7 +235,7 @@ export const TEXTURES = {
   },
 
   // Which set the world starts with; must be a key of `sets` above.
-  active: 'chess',
+  active: 'rgb',
 };
 
 // ----------------------------------------------------------------------------
@@ -261,7 +261,7 @@ export const SCULPTURES = {
   //
   // Hiding them also removes them from collision — you can never be held in
   // place by something you cannot see.
-  visibleWithTextureSet: 'chess',
+  visibleWithTextureSet: 'checkered',
 
   chair: {
     tile: 0,          // top-left
@@ -301,8 +301,8 @@ export const SCULPTURES = {
 // sky dome and no geometry, just a different answer for rays that miss.
 export const SKY = {
   // Colour looking straight at the horizon, and straight up.
-  horizon: '#cfe1f2',
-  zenith: '#3f78c8',
+  horizon: '#8fa8f4',
+  zenith: '#1a39c2',
 
   // Shapes the blend. The mix factor is (ray.y ^ exponent), with ray.y running
   // 0 at the horizon to 1 at the zenith. Below 1 the horizon colour is held

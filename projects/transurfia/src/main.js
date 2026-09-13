@@ -34,7 +34,7 @@ app.start(() => {
 
   return (
     `<span class="set">${label(app.textureSet())}</span>\n` +
-    `<span class="hint">[T] change styles</span>\n` +
-    `<span class="hint">[C]  singularities   ${onOff(app.toggles.singularities)}</span>`
+    `<span class="hint">[T] change ground style</span>\n` +
+    `<span class="hint">[C] singularities   ${onOff(app.toggles.singularities)}</span>`
   );
 });

@@ -28,18 +28,3 @@ much angle there as a point is supposed to have.
 | `T` | tile style |
 | `W` (at a singularity) | stop orbiting and walk away |
 | `Esc` | release the mouse |
-
-## About this copy
-
-This is a **copy** of the standalone project, which is a Vite app with a test
-suite, a debug page and a GPU-vs-CPU verification harness. Only what the game
-needs at runtime is here.
-
-It carries exactly one edit over the original: `index.html` adds an importmap
-pointing `three` at this repository's own `build/three.module.js`, since there
-is no build step here. Everything else — `src/`, `style.css`, `textures/` — is
-byte-identical to the source, so re-syncing is a straight file copy.
-
-`thumbnail.jpg` is a CPU render rather than a screenshot: it walks the same
-topology with the same crossing budget, but draws flat tile colours instead of
-textures.
