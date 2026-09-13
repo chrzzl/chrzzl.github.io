@@ -27,7 +27,7 @@ app.start(() => {
   if (app.player.mode === 'singularity') {
     return (
       `<span class="set">Singularity</span>\n` +
-      `<span class="hint">mouse  sweep around it — three turns to get back</span>\n` +
+      `<span class="hint">mouse  sweep around the singularity</span>\n` +
       `<span class="hint">[W]    walk away</span>`
     );
   }
