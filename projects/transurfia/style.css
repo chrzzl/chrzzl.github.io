@@ -1,0 +1,87 @@
+/* Shared chrome for index.html and debug.html. The world itself is drawn
+   entirely by the fragment shader; everything here is overlay. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #111;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+
+canvas {
+  display: block;
+}
+
+#hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  color: #eee;
+  font: 13px/1.5 monospace;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre;
+}
+
+/* The texture set's name: the one piece of the HUD meant to be read at a
+   glance. Everything else is deliberately quieter. */
+#hud .set {
+  color: #fff;
+  font-weight: 700;
+}
+
+#hud .hint {
+  opacity: 0.5;
+}
+
+#blocker {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #eee;
+  font: 16px/1.5 sans-serif;
+  text-align: center;
+  cursor: pointer;
+}
+
+#blocker.hidden {
+  display: none;
+}
+
+#blocker h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+
+#blocker .subtitle {
+  font-size: 13px;
+  opacity: 0.65;
+  margin-bottom: 18px;
+}
+
+#blocker .keys {
+  font: 12px/2 monospace;
+  opacity: 0.85;
+}
+
+#blocker kbd {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+#blocker a {
+  color: #9cf;
+}

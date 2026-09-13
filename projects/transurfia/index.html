@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Transurfia — GPU ray-traced translation surface</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div id="hud"></div>
+      <div id="blocker">
+        <div>
+          <h1>Welcome to Transurfia</h1>
+          <div class="subtitle">An L-shaped translation surface, ray traced per pixel on the GPU.</div>
+          <div class="keys">
+            <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move &nbsp;·&nbsp; mouse to look &nbsp;·&nbsp; <kbd>Shift</kbd> run<br />
+            <kbd>G</kbd> tile grid &nbsp;·&nbsp; <kbd>C</kbd> singularity columns &nbsp;·&nbsp; <kbd>T</kbd> tile styles &nbsp;·&nbsp; <kbd>Esc</kbd> release cursor<br />
+            walk into a grey column to orbit it &nbsp;·&nbsp; <kbd>W</kbd> to walk away again<br />
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- The one edit this copy carries over the source project, which is a Vite
+         app and resolves `three` from node_modules. Nothing is bundled here, so
+         the bare specifier is mapped to this repository's own three build. -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "../../build/three.module.js"
+        }
+      }
+    </script>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
