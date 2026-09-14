@@ -107,6 +107,7 @@ export function createApp() {
     // along with the shader, so a hidden chair never blocks anyone.
     const showSculptures = sculpturesVisible(name);
     rayTracer.setSculptures(showSculptures);
+    minimap.setSculptures(showSculptures);
     for (const o of sculptureObstacles) {
       o.radius = showSculptures ? o.baseRadius : 0;
     }

@@ -1,4 +1,7 @@
-import { WORLD, COLORS, PLAYER } from './config.js';
+import {
+  WORLD, COLORS, PLAYER, SCULPTURES,
+  sculpturePosition, sculptureRadius,
+} from './config.js';
 
 // ============================================================================
 // MINIMAP
@@ -48,6 +51,23 @@ const TILE_WASH = 'rgba(6, 9, 14, 0.55)';
 const PLAYER_COLOR = '#ff2d95';
 const PLAYER_RGB = '255, 45, 149';
 
+// The two sculptures, drawn on the map in the shape of their own footprint —
+// a square for the box-built chair, a disc for the round table — so that the
+// landmarks the player can see in the world have a counterpart they can steer
+// by. They are drawn ONLY while the texture set that owns them is active
+// (SCULPTURES.visibleWithTextureSet), for the same reason they leave collision
+// then: the map must not promise furniture that is not there.
+//
+// They are painted in the sculptures' OWN colours, straight out of SCULPTURES —
+// the same hex the shader is given — so that the brown you see on the map is the
+// brown you see on the floor. That is the whole value of the marker: it is not a
+// legend entry, it is the object.
+//
+// Those browns are dark and the tile previews under them are washed to near
+// black, so what separates a marker from its tile is the light hairline below
+// rather than any brightening of the fill.
+const SCULPTURE_EDGE = 'rgba(255, 255, 255, 0.85)';
+
 // Half the HORIZONTAL field of view, in radians. PLAYER.fieldOfView is the
 // vertical one (that is three.js's convention and what the ray tracer builds
 // its rays from), so the window's aspect ratio has to widen it. Read per frame
@@ -90,6 +110,37 @@ export function createMinimap() {
   // surface.js's octagon, minus the two split points that only matter for the
   // gluing (they sit mid-edge and would draw identically).
   const OUTLINE = [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2], [0, 2]];
+
+  // Where the two sculptures sit on the map. Resolved once: they never move.
+  //
+  // The chair is drawn as the square its seat really occupies — SCULPTURES gives
+  // a footprint RADIUS, and that circle is the one circumscribing the seat, so
+  // the half-side is it over root two. The table's footprint radius is already
+  // the radius of its overhanging top, so its disc takes it unchanged. Both
+  // therefore cover exactly the ground the player is pushed out of.
+  const MARKERS = [
+    { spec: SCULPTURES.chair, square: true },
+    { spec: SCULPTURES.table, square: false },
+  ].map(({ spec, square }) => {
+    const [x, z] = sculpturePosition(spec);
+    const [cx, cy] = toCanvas(x, z);
+    return {
+      cx,
+      cy,
+      square,
+      radius: sculptureRadius(spec) * scale,
+      color: spec.color,
+    };
+  });
+
+  // Whether the sculptures are standing in the world right now. app.js owns the
+  // answer — it is the same one it hands the shader and the collision code —
+  // so the map cannot end up showing furniture you can walk through.
+  let sculptures = false;
+
+  function setSculptures(visible) {
+    sculptures = visible;
+  }
 
   // One downscaled canvas per tile, or null before the textures have loaded.
   let previews = [null, null, null];
@@ -148,6 +199,25 @@ export function createMinimap() {
     ctx.closePath();
     ctx.stroke();
 
+    // The sculptures, under the player marker so that standing next to one
+    // never hides where you are.
+    if (sculptures) {
+      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = SCULPTURE_EDGE;
+      for (const m of MARKERS) {
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        if (m.square) {
+          const h = m.radius / Math.SQRT2;
+          ctx.rect(m.cx - h, m.cy - h, 2 * h, 2 * h);
+        } else {
+          ctx.arc(m.cx, m.cy, m.radius, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
     // Player.
     const [px, py] = toCanvas(position.x, position.y);
     // Camera forward at yaw 0 is world (0, -1), rotated by yaw about Y. The map
@@ -188,5 +258,5 @@ export function createMinimap() {
     ctx.stroke();
   }
 
-  return { canvas, draw, setTextures };
+  return { canvas, draw, setTextures, setSculptures };
 }
