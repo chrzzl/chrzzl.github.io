@@ -1,4 +1,5 @@
 import { createApp } from './app.js';
+import { preflightPassed, reportReady, reportFailure } from './errors.js';
 
 // ============================================================================
 // TRANSURFIA — player entry point
@@ -10,7 +11,25 @@ import { createApp } from './app.js';
 // For the frame counter, ray-traversal statistics and the debug visualisations,
 // open /debug.html instead.
 
-const app = createApp();
+// preflight.js has already decided whether this browser can run the thing, and
+// has written its reason into the welcome overlay if not. Starting anyway would
+// paint a canvas over that explanation, so the only correct move is to stop.
+if (!preflightPassed()) throw new Error('preflight failed; not starting');
+
+// Anything that escapes createApp() past this point is a genuine bug rather
+// than an unsupported browser, but the user's situation is identical either
+// way: the page does not work and nobody has told them why. The catch turns it
+// into a sentence on screen and leaves the real error in the console.
+let app;
+try {
+  app = createApp();
+} catch (error) {
+  reportFailure('startup-failed', error);
+  throw error;
+}
+
+// Alive. Stops the startup watchdog before it concludes otherwise.
+reportReady();
 
 // Set names are lower-case keys in config.js. Three letters or fewer is an
 // acronym (RGB); anything longer reads better capitalised.

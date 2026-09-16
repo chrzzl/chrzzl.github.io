@@ -377,7 +377,91 @@ export const RENDER = {
   // Upper bound on device pixel ratio. Ray tracing costs a full traversal per
   // physical pixel, so this is the main performance dial: 1.0 is fastest,
   // 2.0 is sharpest on a HiDPI display.
+  //
+  // This is a CEILING, not a setting. What the renderer actually uses is chosen
+  // at run time by the adaptive controller below, which never exceeds it.
   maxPixelRatio: 1.5,
+
+  // Adaptive quality. See quality.js, which owns the logic; these are all of
+  // its dials in one place.
+  //
+  // The problem being solved: this renderer's cost is linear in pixel count and
+  // it has no level of detail, no culling and nothing to skip — a 4K laptop on
+  // integrated graphics, a VM with no GPU at all, or a browser that has quietly
+  // fallen back to software rendering will each grind through exactly the same
+  // work per pixel as a desktop GPU. Rather than hand those machines an
+  // unplayable frame rate at full resolution, the controller measures what it
+  // is actually getting and spends the pixels it can afford.
+  //
+  // Only RESOLUTION moves. The shader, the crossing budget and the traversal
+  // are identical at every quality level.
+  adaptive: {
+    // Turn the whole thing off and pin rendering at maxPixelRatio.
+    enabled: true,
+
+    // The floor. Below roughly half ratio the tile textures start to alias
+    // badly enough that the surface becomes hard to read, which defeats the
+    // point of the world — better a slow frame rate than an illegible one.
+    minPixelRatio: 0.5,
+
+    // Where to start, before anything has been measured. Null means "at the
+    // ceiling": a capable machine is never made to look soft while the
+    // controller works out that it is capable.
+    startPixelRatio: null,
+
+    // Ratio between neighbouring rungs of the quality ladder. 0.8 is a ~36%
+    // cut in pixels per step — big enough to actually rescue a struggling
+    // frame rate, small enough not to be jarring when it happens.
+    step: 0.8,
+
+    // Drop quality when the smoothed frame rate sits below `targetFps`, raise
+    // it when it sits above `upgradeFps`. The gap between them is a dead band
+    // where nothing happens at all, and it is the first line of defence
+    // against oscillation: a machine that lands inside it stays put forever.
+    targetFps: 50,
+    upgradeFps: 75,
+
+    // How long a verdict has to hold before it is acted on. Asymmetric on
+    // purpose — a struggling machine should be rescued quickly, while a
+    // comfortable one has nothing to gain from being upgraded in a hurry and
+    // everything to lose from being upgraded during a quiet moment it cannot
+    // sustain.
+    downgradeAfterSeconds: 1.5,
+    upgradeAfterSeconds: 8,
+
+    // Ignored after a quality change: resizing the drawing buffer costs a
+    // frame or two by itself, and those frames say nothing about whether the
+    // new resolution is sustainable.
+    settleSeconds: 0.5,
+
+    // Ignored at startup. Shader compilation, texture decode and the first
+    // pipeline warm-up are slow on every machine that exists.
+    warmupSeconds: 1.5,
+
+    // Frames longer than this are suspected of being stalls rather than
+    // measurements — a backgrounded tab, a breakpoint, a garbage collection
+    // pause — and are ignored until `spikeToleranceFrames` of them have
+    // arrived in a row, at which point the machine is simply believed to be
+    // that slow. Anything accepted is clamped to `maxMeasuredSeconds` first.
+    //
+    // The tolerance is what keeps a software renderer, where EVERY frame is
+    // over the threshold, from having all its evidence discarded and being
+    // left at full resolution for ever.
+    spikeSeconds: 0.5,
+    spikeToleranceFrames: 2,
+    maxMeasuredSeconds: 2,
+
+    // Time constant of the frame-time average. Long enough to ignore single
+    // slow frames, short enough to notice a real change within a second.
+    smoothingSeconds: 0.5,
+
+    // If an upgrade has to be undone within this long, the rung it went to is
+    // marked unreachable for the rest of the session. Without it a machine
+    // sitting exactly on the boundary would breathe between two resolutions
+    // indefinitely, which is far more distracting than simply running at the
+    // lower one.
+    oscillationGuardSeconds: 20,
+  },
 
   // Draw a thin darker seam along tile boundaries. It is the clearest cue for
   // reading how many copies deep a stretch of floor is, but it also draws a

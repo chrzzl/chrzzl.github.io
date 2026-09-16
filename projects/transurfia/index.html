@@ -22,6 +22,18 @@
         </div>
       </div>
     </div>
+    <!-- Preflight. A CLASSIC script, on purpose and load-bearing: one of the
+         things it reports is "this browser cannot run modules", which a module
+         could not report. It runs before the import map and before main.js, and
+         it sits after #blocker so the element is there to write into.
+
+         If it finds a problem it replaces the welcome text with the reason and
+         main.js declines to start. If it finds none it arms a watchdog, so that
+         a module failing to load — a browser too old for import maps, a 404 on
+         the three.js build — still ends in an explanation rather than in a
+         welcome screen that never responds. -->
+    <script src="src/preflight.js"></script>
+
     <!-- The one edit this copy carries over the source project, which is a Vite
          app and resolves `three` from node_modules. Nothing is bundled here, so
          the bare specifier is mapped to this repository's own three build. -->

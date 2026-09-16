@@ -85,3 +85,29 @@ canvas {
 #blocker a {
   color: #9cf;
 }
+
+/* The preflight's error state, written in by preflight.js when the browser
+   cannot run the world.
+
+   Two differences from the welcome screen, both about not lying to the user.
+   It is opaque rather than translucent, because there is nothing behind it to
+   show through — the canvas was never created. And the cursor goes back to an
+   arrow: the welcome screen is a button that asks for pointer lock when
+   clicked, this one does nothing at all, and a pointing hand would invite
+   clicking at a screen that will never respond. */
+#blocker.error {
+  background: #0b0d12;
+  cursor: default;
+}
+
+#blocker.error .reason {
+  max-width: 44ch;
+  margin: 0 auto 10px;
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+/* The first line is the answer; the rest is context for anyone who wants it. */
+#blocker.error .reason:first-of-type {
+  opacity: 0.95;
+}

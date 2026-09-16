@@ -28,3 +28,25 @@ much angle there as a point is supposed to have.
 | `T` | tile style |
 | `W` (at a singularity) | stop orbiting and walk away |
 | `Esc` | release the mouse |
+
+## Requirements
+
+A desktop browser with **WebGL2** and **import map** support — Chrome/Edge 89+,
+Firefox 108+, Safari 16.4+. Mouse and keyboard are required; touch devices are
+detected and turned away rather than left on a welcome screen that cannot be
+dismissed. `src/preflight.js` runs before anything else and explains on screen
+whichever of these is missing.
+
+Render resolution adapts to the frame rate it is actually achieving, between
+`RENDER.adaptive.minPixelRatio` and `RENDER.maxPixelRatio`, so integrated
+graphics, 4K displays and GPU-less VMs degrade in sharpness rather than in
+playability. All of its thresholds live in `RENDER.adaptive` in `config.js`.
+
+## Self-checks
+
+Neither needs a browser or a build step:
+
+```sh
+node tools/preflight.selfcheck.mjs   # the support decision, over every combination
+node tools/quality.selfcheck.mjs     # the quality controller, over simulated machines
+```
