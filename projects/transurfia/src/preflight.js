@@ -127,23 +127,17 @@
   // `code` is for tests and the console; `title` and `lines` are what the user
   // reads.
   //
-  // Order matters. The device check comes before the WebGL one so that a tablet
-  // — which may well have perfectly good WebGL2 — is told the real reason it
-  // cannot play rather than being sent off to enable hardware acceleration.
+  // Touch devices are NOT rejected. They used to be, when walking the surface
+  // was the only thing on offer; they now get the guided demo instead (see
+  // DEMO in config.js), which needs exactly the same browser features as the
+  // interactive version and none of the input. So `touchOnly` is no longer a
+  // verdict here — it is reported in env() and app.js reads it to decide which
+  // of the two experiences to start.
+  //
+  // What remains a rejection is having NEITHER usable input: no touch and no
+  // Pointer Lock means nothing here can be driven or watched.
 
   function evaluate(env) {
-    if (env.touchOnly || !env.pointerLock) {
-      return {
-        code: 'touch-device',
-        title: 'Desktop only, for now',
-        lines: [
-          'Mobile and touch devices are not currently supported.',
-          'Transurfia needs a mouse and a keyboard: you look with the pointer ' +
-            'locked to the window and walk with W, A, S and D.',
-        ],
-      };
-    }
-
     if (env.modules === false || env.importMaps === false) {
       return {
         code: 'browser-too-old',
@@ -164,6 +158,19 @@
             'acceleration or try another browser.',
           'Remote desktop sessions and virtual machines often have no GPU to ' +
             'offer, which has the same effect.',
+        ],
+      };
+    }
+
+    if (!env.touchOnly && !env.pointerLock) {
+      return {
+        code: 'no-input',
+        title: 'This browser cannot be driven',
+        lines: [
+          'Transurfia needs either Pointer Lock, to walk the surface with a ' +
+            'mouse and keyboard, or a touch screen, to watch the guided demo. ' +
+            'This browser reports neither.',
+          'A current version of Chrome, Edge, Firefox or Safari will work.',
         ],
       };
     }
@@ -269,11 +276,13 @@
   // ---- public surface -----------------------------------------------------
 
   var passed = false;
+  var lastEnv = null;
 
   // Run once, now. The script tag sits after #blocker in the document so the
   // element is already there to write into.
   function run() {
     var env = detect();
+    lastEnv = env;
     var report = evaluate(env);
 
     if (report) {
@@ -291,6 +300,14 @@
     // application — "do not start" is the whole point of a preflight.
     ok: function () {
       return passed && !reported;
+    },
+
+    // What the checks found. app.js reads `touchOnly` from here to choose
+    // between the interactive experience and the guided demo, rather than
+    // asking the same media queries a second time in a second file and risking
+    // the two disagreeing about what a phone is.
+    env: function () {
+      return lastEnv;
     },
 
     // Called by main.js once the application is alive. Stops the watchdog.

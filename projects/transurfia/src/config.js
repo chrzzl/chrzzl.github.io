@@ -292,6 +292,103 @@ export const SCULPTURES = {
 };
 
 // ----------------------------------------------------------------------------
+// Guided demo
+// ----------------------------------------------------------------------------
+//
+// What touch devices get instead of the game.
+//
+// Walking this surface needs a mouse and a keyboard — you look with the pointer
+// locked to the window and turning is measured in mouse pixels — and a virtual
+// joystick would be a second, worse control scheme to maintain. So a phone gets
+// a fixed tour instead: the player walks a predetermined route while the
+// visitor watches. Non-interactive on purpose.
+//
+// The route is driven by pressing the player's own movement keys (see
+// autoplayer.js), so what a phone shows is the real surface with the real
+// traversal, not a recording and not a simplified version of it.
+//
+// IMPORTANT: the route below is tuned for WORLD.tileSize 3 and
+// PLAYER.walkSpeed 2.5, because legs are measured in seconds and therefore in
+// distance. Change either and the route no longer lands where it was aimed —
+// possibly inside a cone point, which would hijack the demo into orbiting a
+// column for ever. tools/route.selfcheck.mjs asserts both values and walks the
+// whole route through the real physics to prove it stays clear, so a change
+// fails loudly there rather than quietly on a visitor's phone.
+export const DEMO = {
+  // Whether touch devices get the demo at all. False sends them to the same
+  // "desktop only" screen they used to get.
+  enabled: true,
+
+  // Which way the player faces at the start of each lap, in degrees. 0 looks
+  // down -Z, which is up the minimap and straight at the glued top edge of
+  // tile 0 — the view where the world already reads as endless before anyone
+  // has moved.
+  startYaw: 0,
+
+  // Standing-still gap between laps. The reset happens inside it, so the jump
+  // back to the start lands on a frame where nothing is moving.
+  restartPauseSeconds: 1.5,
+
+  // How long the "this is a demo" note stays before fading. It can also be
+  // dismissed with a tap.
+  noteSeconds: 6,
+
+  // ---- the route ----------------------------------------------------------
+  //
+  // Each leg: `seconds`, a `forward`/`strafe` direction, and `turn`/`pitch` as
+  // TOTAL degrees to rotate across the leg. Movement is on or off (the player
+  // is being driven by its keyboard), so forward is effectively 0 or +-1.
+  //
+  // `label` is printed in the corner while the leg runs, which is what makes it
+  // a showcase rather than a screensaver — the viewer is told what they are
+  // looking at. Empty means print nothing.
+  //
+  // The route sticks to the middle of tiles, 1.5 units from every corner,
+  // against a cone-point capture radius of 0.36. Starting at the centre of
+  // tile 0 (1.5, 1.5) and facing -Z:
+  //
+  //   x = 1.5 and x = 4.5 are safe columns, z = 1.5 and z = 4.5 safe rows.
+  //
+  // It is built to show three DIFFERENT gluings, because seeing only one looks
+  // like a mirror and seeing three looks like a world:
+  route: [
+    // Standing still, facing the top edge of tile 0. Nothing has happened yet
+    // and the corridor is already infinite — that is the whole idea, and it is
+    // worth three seconds before any movement muddies it.
+    { seconds: 3, label: 'A corridor with no end' },
+
+    // Straight through the top edge, which is glued to the bottom of tile 1:
+    // walking off the top of the world puts you at the bottom of it. 15 units
+    // at walkSpeed 2.5, so two crossings, ending at (1.5, 4.5).
+    { seconds: 6, forward: 1, label: 'Walking off the top, arriving at the bottom' },
+
+    // Turn to face +X, standing.
+    { seconds: 2.5, turn: -90 },
+
+    // Along the long axis at z = 4.5, through the right edge of tile 2 — glued
+    // all the way back to the left edge of tile 1, the longest jump on the
+    // surface. 15 units, two crossings, ending at (4.5, 4.5).
+    { seconds: 6, forward: 1, label: 'The long way round is also the short way' },
+
+    // Back to facing -Z, standing, now inside tile 2.
+    { seconds: 2.5, turn: 90 },
+
+    // The tight one: the top of tile 2 is glued to its own bottom, a loop only
+    // three units around. Four crossings in five seconds, so the repetition is
+    // impossible to miss. Ends at (4.5, 4.0).
+    { seconds: 5, forward: 1, label: 'The shortest loop in the world' },
+
+    // A slow sweep on the spot. Every direction shows a different stack of
+    // copies, which is the clearest way to see that this is one small world
+    // seen through itself rather than a large one.
+    { seconds: 7, turn: -200, label: 'The same three tiles, whichever way you look' },
+
+    // Settle, so the lap ends still rather than mid-stride.
+    { seconds: 2 },
+  ],
+};
+
+// ----------------------------------------------------------------------------
 // Sky
 // ----------------------------------------------------------------------------
 //
@@ -381,6 +478,17 @@ export const RENDER = {
   // This is a CEILING, not a setting. What the renderer actually uses is chosen
   // at run time by the adaptive controller below, which never exceeds it.
   maxPixelRatio: 1.5,
+
+  // Ceiling on touch devices, which run the guided demo (see DEMO below).
+  //
+  // Lower than the desktop one, and not only because phone GPUs are smaller: a
+  // phone's devicePixelRatio is commonly 2.5-3.5, so 1.0 here is already a
+  // third of native resolution in each axis and the adaptive controller can
+  // still drop to RENDER.adaptive.minPixelRatio underneath it. Starting
+  // conservatively matters more on a phone than on a desktop, because the demo
+  // starts moving immediately and there is no welcome screen to hide the first
+  // few seconds behind.
+  mobileMaxPixelRatio: 1.0,
 
   // Adaptive quality. See quality.js, which owns the logic; these are all of
   // its dials in one place.

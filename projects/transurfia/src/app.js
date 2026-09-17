@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 import {
-  WORLD, PLAYER, RENDER, SINGULARITIES, SCULPTURES, TEXTURES,
+  WORLD, PLAYER, RENDER, SINGULARITIES, SCULPTURES, TEXTURES, DEMO,
   sculpturePosition, sculptureRadius, sculpturesVisible,
 } from './config.js';
 import { createLShapeSurface } from './surface.js';
@@ -10,7 +10,8 @@ import { createMinimap } from './minimap.js';
 import { loadTextureSet, textureSetReady, nextTextureSet, textureSetNames } from './textures.js';
 import { PlayerController } from './player.js';
 import { createQualityController } from './quality.js';
-import { reportFailure } from './errors.js';
+import { createAutoPlayer } from './autoplayer.js';
+import { reportFailure, isTouchDevice } from './errors.js';
 
 // ============================================================================
 // APP WIRING
@@ -26,6 +27,12 @@ export function createApp() {
   const app = document.getElementById('app');
   const hud = document.getElementById('hud');
   const blocker = document.getElementById('blocker');
+
+  // Touch devices watch the guided demo instead of playing (see DEMO in
+  // config.js and autoplayer.js). Decided once, here, and everything that
+  // differs between the two reads this flag — there is no second code path
+  // through the renderer, the surface or the player.
+  const demoMode = DEMO.enabled && isTouchDevice();
 
   // Cleared when the application must stop for good — currently only a lost
   // WebGL context. The frame loop checks it and stops requesting frames, so a
@@ -92,9 +99,11 @@ export function createApp() {
   // Chooses the pixel ratio to render at, from frame times. See quality.js;
   // every threshold is in RENDER.adaptive. Disabled, the renderer simply pins
   // itself to the ceiling, which is what it always used to do.
+  const pixelCeiling = demoMode ? RENDER.mobileMaxPixelRatio : RENDER.maxPixelRatio;
+
   const quality = RENDER.adaptive.enabled
     ? createQualityController({
-        maxPixelRatio: RENDER.maxPixelRatio,
+        maxPixelRatio: pixelCeiling,
         deviceRatio: window.devicePixelRatio || 1,
         ...RENDER.adaptive,
       })
@@ -106,8 +115,21 @@ export function createApp() {
   // uResolution drifting apart — the shader builds its rays from uResolution,
   // so a disagreement there is not a blurry frame but a wrong one.
   function applySize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+    // visualViewport is the part of the page actually on screen. On a phone
+    // that is the difference between the canvas fitting and the canvas being
+    // taller than the display: window.innerHeight there includes the space the
+    // address bar is occupying, and it changes as the bar slides away.
+    //
+    // Consulted ONLY in demo mode, even though every current desktop browser
+    // supports it. On a desktop the two agree — with overflow hidden there are
+    // no scrollbars to account for — except under trackpad pinch-zoom, where
+    // visualViewport shrinks and innerWidth does not. Reading it there would
+    // mean the interactive experience no longer takes the same measurement it
+    // took before this file learned about phones, for no benefit at all. The
+    // desktop expression below is the original one, unchanged.
+    const viewport = demoMode ? window.visualViewport : null;
+    const w = viewport ? Math.round(viewport.width) : window.innerWidth;
+    const h = viewport ? Math.round(viewport.height) : window.innerHeight;
 
     // Re-read per resize: dragging the window to a second monitor, or zooming
     // the browser, changes it without any other notification.
@@ -124,6 +146,19 @@ export function createApp() {
   }
   applySize();
   window.addEventListener('resize', applySize);
+
+  // A phone rotating, and the address bar appearing or collapsing, do not
+  // always arrive as a plain resize. orientationchange in particular fires
+  // before the new dimensions are readable, so the size is taken again on the
+  // next frame rather than immediately.
+  //
+  // Registered only in demo mode. A desktop has no orientation to change, and
+  // its visualViewport resize would fire on browser zoom — an extra, redundant
+  // applySize() on a path that already handles zoom through window.resize.
+  if (demoMode) {
+    window.addEventListener('orientationchange', () => requestAnimationFrame(applySize));
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', applySize);
+  }
 
   // --- player ----------------------------------------------------------
   // resolveMove() inside PlayerController applies the same edge gluings on the
@@ -150,10 +185,44 @@ export function createApp() {
   const start = PLAYER.startPosition ?? [WORLD.tileSize * 0.5, WORLD.tileSize * 0.5];
   player.position.set(start[0], start[1]);
 
-  blocker.addEventListener('click', () => player.requestLock());
-  document.addEventListener('pointerlockchange', () => {
-    blocker.classList.toggle('hidden', document.pointerLockElement === renderer.domElement);
-  });
+  // --- the two ways in -------------------------------------------------
+  //
+  // Interactive: the welcome overlay is a button that asks for pointer lock,
+  // and comes back whenever the lock is released.
+  //
+  // Demo: there is nothing to ask for. The overlay is dismissed immediately and
+  // replaced by a note explaining why nothing responds to touch, which fades on
+  // its own. Pointer lock is never requested — on a phone the request either
+  // fails or, worse, succeeds and swallows the visitor's scrolling.
+  const autoPlayer = demoMode ? createAutoPlayer(player, { start }) : null;
+
+  if (demoMode) {
+    blocker.classList.add('hidden');
+    showDemoNote();
+  } else {
+    blocker.addEventListener('click', () => player.requestLock());
+    document.addEventListener('pointerlockchange', () => {
+      blocker.classList.toggle('hidden', document.pointerLockElement === renderer.domElement);
+    });
+  }
+
+  function showDemoNote() {
+    const note = document.getElementById('demo-note');
+    if (!note) return;
+
+    note.classList.remove('hidden');
+
+    // Removed from the layout after the fade rather than merely made
+    // transparent: an invisible element over the canvas would still eat the tap
+    // that dismisses it, and on a phone that is the only input there is.
+    const dismiss = () => {
+      note.classList.add('faded');
+      window.setTimeout(() => note.classList.add('hidden'), 1000);
+    };
+
+    note.addEventListener('click', dismiss);
+    window.setTimeout(dismiss, DEMO.noteSeconds * 1000);
+  }
 
   // --- minimap ---------------------------------------------------------
   const minimap = createMinimap();
@@ -248,6 +317,11 @@ export function createApp() {
       // its own outlier rejection — see RENDER.adaptive.spikeSeconds.
       const rawDt = clock.getDelta();
       const dt = Math.min(rawDt, 0.1);
+
+      // The demo presses the player's keys and turns its head; player.update()
+      // then runs exactly as it does for a human, through the same resolver and
+      // the same edge gluings. See autoplayer.js.
+      if (autoPlayer) autoPlayer.update(dt);
       player.update(dt);
 
       rayTracer.setCamera(camera);
@@ -273,6 +347,9 @@ export function createApp() {
     toggles,
     // Null when RENDER.adaptive.enabled is false. Read by debug HUDs.
     quality,
+    // Null on desktop. main.js reads its label to narrate the tour.
+    autoPlayer,
+    demoMode,
     start: start_,
     // Read as a function: the T key reassigns it, so a captured value would go
     // stale in the HUD.

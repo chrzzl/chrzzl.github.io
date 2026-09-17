@@ -28,6 +28,25 @@ export function preflightPassed() {
   return !p || typeof p.ok !== 'function' ? true : p.ok();
 }
 
+// True on a touch-only device, which gets the guided demo rather than the
+// interactive experience.
+//
+// The answer comes from preflight.js, which already ran the media queries —
+// deliberately not re-derived here. Two independent definitions of "is this a
+// phone" would eventually disagree, and the failure would be a device that
+// passes the preflight and then starts an experience it cannot drive.
+//
+// With no preflight present (a bare harness, a test) this reports desktop. That
+// is the safe default: the interactive path works on a phone in the sense that
+// it starts and renders, it just cannot be steered, whereas guessing "phone" on
+// a desktop would take the controls away from someone who has them.
+export function isTouchDevice() {
+  const p = preflight();
+  if (!p || typeof p.env !== 'function') return false;
+  const env = p.env();
+  return !!(env && env.touchOnly);
+}
+
 // The application is alive. Cancels the startup watchdog, which would otherwise
 // conclude from the silence that loading had failed.
 export function reportReady() {

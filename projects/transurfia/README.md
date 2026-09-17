@@ -29,18 +29,30 @@ much angle there as a point is supposed to have.
 | `W` (at a singularity) | stop orbiting and walk away |
 | `Esc` | release the mouse |
 
+## On a phone
+
+Walking this surface needs a mouse and a keyboard — you look with the pointer
+locked to the window, and turning is measured in mouse pixels. So touch devices
+get a **guided demo** instead: the player walks a fixed 34-second route through
+three different edge gluings while you watch, looping until you leave.
+
+It is not a recording, and it is not a second implementation. `src/autoplayer.js`
+presses the real player's movement keys and turns its head, then lets
+`player.update()` run exactly as it does for a human — same resolver, same
+gluings, same cone-point capture. `PlayerController` needed no changes at all.
+The route is `DEMO.route` in `config.js`.
+
 ## Requirements
 
-A desktop browser with **WebGL2** and **import map** support — Chrome/Edge 89+,
-Firefox 108+, Safari 16.4+. Mouse and keyboard are required; touch devices are
-detected and turned away rather than left on a welcome screen that cannot be
-dismissed. `src/preflight.js` runs before anything else and explains on screen
-whichever of these is missing.
+**WebGL2** and **import map** support — Chrome/Edge 89+, Firefox 108+,
+Safari 16.4+. `src/preflight.js` runs before anything else and explains on
+screen whichever is missing.
 
-Render resolution adapts to the frame rate it is actually achieving, between
-`RENDER.adaptive.minPixelRatio` and `RENDER.maxPixelRatio`, so integrated
-graphics, 4K displays and GPU-less VMs degrade in sharpness rather than in
-playability. All of its thresholds live in `RENDER.adaptive` in `config.js`.
+Render resolution adapts to the frame rate it is actually achieving, so
+integrated graphics, 4K displays, GPU-less VMs and phones degrade in sharpness
+rather than in playability. Thresholds live in `RENDER.adaptive`; the ceiling is
+`RENDER.maxPixelRatio` on desktop and the lower `RENDER.mobileMaxPixelRatio` for
+the demo.
 
 ## Self-checks
 
@@ -49,4 +61,20 @@ Neither needs a browser or a build step:
 ```sh
 node tools/preflight.selfcheck.mjs   # the support decision, over every combination
 node tools/quality.selfcheck.mjs     # the quality controller, over simulated machines
+node tools/route.selfcheck.mjs       # the demo route, walked through the real physics
+node tools/desktop-unchanged.selfcheck.mjs   # that the demo did not touch the desktop
 ```
+
+The route check is the one that matters most. `DEMO.route` is a list of
+durations, and durations become distances, so whether the route is safe is a
+claim about where the player ends up — and walking into a cone point would not
+crash anything, it would quietly leave the demo orbiting a column for ever on a
+visitor's phone. So the route is not inspected but *walked*: a real
+`PlayerController` on the real surface, at six frame rates from 144fps down to
+6fps plus 400 seconds of deliberately erratic ones, asserting it never comes
+within twice the capture radius of any of the eight corners.
+
+That check needs `three` to resolve under node, which `node_modules/three`
+provides as a three-line alias to the same build the browser loads via the
+import map. Nothing is vendored twice, and Jekyll excludes `node_modules` from
+GitHub Pages, so it never reaches the published site.

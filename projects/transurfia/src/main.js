@@ -39,6 +39,15 @@ const label = (name) =>
 app.start(() => {
   const onOff = (v) => (v ? 'on' : 'off');
 
+  // On a phone the HUD has no keys to advertise, so it narrates instead: the
+  // current leg's label from DEMO.route. That one line is what makes this a
+  // guided showcase rather than a screensaver — the visitor is told what the
+  // thing they are watching is supposed to be surprising about.
+  if (app.demoMode) {
+    const tour = app.autoPlayer.state();
+    return tour.label ? `<span class="hint">${tour.label}</span>` : '';
+  }
+
   // Standing at a singularity, WASD is switched off and the mouse orbits the
   // column instead. That is worth one line of its own: without it the controls
   // simply appear to have stopped working, and W — the way out — is the one

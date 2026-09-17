@@ -11,8 +11,40 @@ body {
 
 #app {
   width: 100vw;
+  /* dvh over vh: on a phone, 100vh is the viewport with the address bar
+     ignored, so a 100vh canvas is taller than the screen and its bottom edge
+     sits under the bar. dvh tracks the space actually visible. The vh line
+     stays first as the fallback for browsers without dvh. */
   height: 100vh;
+  height: 100dvh;
   position: relative;
+}
+
+/* The world is a fixed full-screen canvas, so every browser TOUCH gesture that
+   could act on it — scroll, pinch, double-tap zoom, pull-to-refresh — can only
+   get in the way.
+
+   Every property here is touch-only, which is the point: none of them changes
+   anything a mouse or a keyboard can do, so the desktop experience is untouched
+   by them. In particular `user-select: none` is deliberately NOT in this rule —
+   it would take text selection away from the whole document, including the
+   preflight's error screen, and someone reading an error message is exactly the
+   person most likely to want to copy it. */
+html,
+body,
+#app {
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Selection suppressed only where a selection would be a misfire: dragging
+   across the world, or long-pressing the note that is only there to be tapped
+   away. #blocker is left selectable on purpose — see above. */
+canvas,
+#demo-note {
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 canvas {
@@ -84,6 +116,45 @@ canvas {
 
 #blocker a {
   color: #9cf;
+}
+
+/* The touch-device note: "this is a demo, the real thing is on desktop".
+
+   A banner at the top rather than a full-screen scrim like #blocker, because
+   it is not a gate — the demo is already running behind it and the first
+   seconds are the part worth seeing. It fades on its own after
+   DEMO.noteSeconds, or on a tap. */
+#demo-note {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  padding: 14px 18px calc(14px + env(safe-area-inset-top, 0px));
+  background: linear-gradient(rgba(6, 9, 14, 0.92), rgba(6, 9, 14, 0));
+  color: #eee;
+  font: 14px/1.45 system-ui, sans-serif;
+  text-align: center;
+  cursor: pointer;
+  transition: opacity 1s ease;
+}
+
+#demo-note strong {
+  display: block;
+  font-weight: 600;
+}
+
+#demo-note span {
+  opacity: 0.7;
+  font-size: 13px;
+}
+
+#demo-note.faded {
+  opacity: 0;
+}
+
+#demo-note.hidden {
+  display: none;
 }
 
 /* The preflight's error state, written in by preflight.js when the browser

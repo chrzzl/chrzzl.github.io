@@ -154,18 +154,31 @@ const verdict = (overrides) => {
   );
   check('no import maps is rejected', verdict({ importMaps: false }) === 'browser-too-old');
   check('no WebGL2 is rejected', verdict({ webgl2: false }) === 'no-webgl2');
-  check('a touch-only device is rejected', verdict({ touchOnly: true }) === 'touch-device');
-  check('no pointer lock is rejected', verdict({ pointerLock: false }) === 'touch-device');
 
-  // A tablet has perfectly good WebGL2 and is still unplayable. Sending it off
-  // to enable hardware acceleration would be advice that cannot possibly work.
+  // Touch devices are ADMITTED now — they get the guided demo. This is the
+  // check that would have failed before that change, and the one that must not
+  // regress: a phone reaching the error screen means the demo is unreachable.
   check(
-    'a tablet is told about the device, not about WebGL',
-    verdict({ touchOnly: true, webgl2: false }) === 'touch-device'
+    'a touch-only device is admitted',
+    verdict({ touchOnly: true, pointerLock: false }) === 'pass',
+    verdict({ touchOnly: true, pointerLock: false })
+  );
+
+  // Neither pointer lock nor touch: nothing here can be driven or watched.
+  check(
+    'a browser with no usable input is rejected',
+    verdict({ pointerLock: false, touchOnly: false }) === 'no-input'
+  );
+
+  // A broken browser is told what is broken, not what device it is. WebGL2 is
+  // needed by the demo exactly as much as by the game.
+  check(
+    'a phone without WebGL2 hears about WebGL2',
+    verdict({ touchOnly: true, pointerLock: false, webgl2: false }) === 'no-webgl2'
   );
 
   // Every report has to be worth reading.
-  for (const broken of [{ modules: false }, { webgl2: false }, { touchOnly: true }]) {
+  for (const broken of [{ modules: false }, { webgl2: false }, { pointerLock: false }]) {
     const report = evaluate({ ...ok, ...broken });
     check(
       `${report.code} has a title and an explanation`,
@@ -214,6 +227,15 @@ const verdict = (overrides) => {
   const goodApi = load(good);
   check('a passing preflight reports ok', goodApi.ok() === true);
   check('a passing preflight leaves the welcome screen', good.blocker.children.length === 0);
+
+  // app.js chooses interactive-vs-demo from this, so it has to be published
+  // and it has to be right. Two definitions of "is this a phone" in two files
+  // would eventually disagree; this is the single one.
+  check('a desktop publishes touchOnly false', goodApi.env().touchOnly === false);
+
+  const phone = load(fakeBrowser({ touchPoints: 5, coarse: true, fine: false }));
+  check('a phone passes the preflight', phone.ok() === true);
+  check('a phone publishes touchOnly true', phone.env().touchOnly === true);
 
   // A late failure still reaches the screen.
   goodApi.fail('renderer-failed', new Error('no context'));
