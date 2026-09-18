@@ -72,21 +72,62 @@
     return typeof Element !== 'undefined' && 'requestPointerLock' in Element.prototype;
   }
 
-  // Touch-ONLY, which is not the same question as "is this a phone".
+  // Is the main way of pointing at this device a finger?
   //
-  // Deliberately conservative: all three signals must agree before we refuse to
-  // start. A touchscreen laptop reports coarse pointers and a positive
-  // maxTouchPoints just as a tablet does, and the thing that separates them is
-  // `any-pointer: fine` — a mouse or trackpad somewhere on the device. Being
-  // wrong in this direction shows a working desktop an error screen it cannot
-  // dismiss, so the check errs toward letting a device through.
+  // The first version of this asked for three things at once: touch points, a
+  // coarse PRIMARY pointer, and no fine pointer anywhere (`any-pointer: fine`).
+  // The last of those made it useless. Android Chrome reports `any-pointer:
+  // fine` as matching — a phone can take a stylus, and the query asks what the
+  // device is CAPABLE of, not what is in the user's hand — so every Android
+  // phone failed the test and was handed the interactive version it cannot
+  // drive: a welcome screen that does nothing when tapped. The check was
+  // written to fail safe and failed in the one direction that leaves a visitor
+  // with nothing.
+  //
+  // `any-pointer` is the wrong family of query for this question. What matters
+  // is the primary pointer, which is what `pointer` means, and which already
+  // gives the right answer for the case `any-pointer` was brought in to
+  // handle: on a laptop with a touchscreen and a trackpad the primary pointer
+  // is the trackpad, so `pointer: coarse` does not match and it correctly gets
+  // the real thing.
+  //
+  // Three signals, best first.
   function isTouchOnly() {
-    var touchPoints = (global.navigator && global.navigator.maxTouchPoints) || 0;
-    if (touchPoints === 0) return false;
-    if (!global.matchMedia) return false;
-    var coarse = global.matchMedia('(pointer: coarse)').matches;
-    var fine = global.matchMedia('(any-pointer: fine)').matches;
-    return coarse && !fine;
+    var nav = global.navigator || {};
+
+    // 1. Chromium's own answer (Chrome/Edge 90+, secure contexts). The only
+    //    signal here that is a statement about the device rather than an
+    //    inference from its capabilities.
+    var uaData = nav.userAgentData;
+    if (uaData && uaData.mobile === true) return true;
+
+    // 2. A coarse primary pointer, with touch hardware to back it up. Catches
+    //    iOS and iPadOS, which have no userAgentData — and iPadOS, which
+    //    claims to be a Mac, is caught by nothing else.
+    var touchPoints = nav.maxTouchPoints || 0;
+    if (touchPoints > 0 && global.matchMedia &&
+        global.matchMedia('(pointer: coarse)').matches) {
+      return true;
+    }
+
+    // 3. The user agent string, consulted only when both better signals have
+    //    come up empty. Sniffing is a last resort, but "no signal at all"
+    //    should not silently mean "desktop" on a device that says outright
+    //    what it is.
+    return /Android|iPhone|iPod|Windows Phone/i.test(nav.userAgent || '');
+  }
+
+  // ?mode=demo and ?mode=interactive override the detection.
+  //
+  // Any inference from browser capabilities will be wrong for somebody — a
+  // phone with a Bluetooth mouse and keyboard can genuinely play, and some
+  // device will misreport itself in a way nobody here has seen. This is the
+  // escape hatch for both, and it is what makes a bug report answerable
+  // without a debug build.
+  function forcedMode() {
+    var search = (global.location && global.location.search) || '';
+    var match = /[?&]mode=(demo|interactive)/.exec(search);
+    return match ? match[1] : null;
   }
 
   // Does a real WebGL2 context come back?
@@ -112,11 +153,16 @@
   }
 
   function detect() {
+    var forced = forcedMode();
+    var detected = isTouchOnly();
+
     return {
       modules: supportsModules(),
       importMaps: supportsImportMaps(),
       pointerLock: supportsPointerLock(),
-      touchOnly: isTouchOnly(),
+      touchOnly: forced === null ? detected : forced === 'demo',
+      detectedTouchOnly: detected,
+      forcedMode: forced,
       webgl2: probeWebGL2(),
     };
   }
@@ -283,6 +329,20 @@
   function run() {
     var env = detect();
     lastEnv = env;
+
+    // Logged on every load, at one line. This bug — an Android phone served
+    // the desktop version — cost a round trip to a real device to identify,
+    // because nothing anywhere said what the browser had actually reported.
+    console.info(
+      '[transurfia] ' +
+        (env.touchOnly ? 'guided demo' : 'interactive') +
+        (env.forcedMode ? ' (forced by ?mode=' + env.forcedMode + ')' : '') +
+        ' | touch=' + env.detectedTouchOnly +
+        ' webgl2=' + env.webgl2 +
+        ' pointerLock=' + env.pointerLock +
+        ' | override with ?mode=demo or ?mode=interactive'
+    );
+
     var report = evaluate(env);
 
     if (report) {

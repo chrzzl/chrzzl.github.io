@@ -35,12 +35,21 @@ function check(name, condition, detail) {
 
 // --- a browser, roughly -----------------------------------------------------
 
+// A browser, modelled closely enough to matter.
+//
+// `media` is an explicit map of media query -> matches, because the thing that
+// broke on real hardware was precisely the difference between `pointer: coarse`
+// and `any-pointer: fine`. The first version of this file answered every query
+// containing "coarse" the same way, which is exactly why it passed while a real
+// Android phone failed. An unknown query now throws rather than guessing.
 function fakeBrowser({
   touchPoints = 0,
-  fine = true,
-  coarse = false,
+  media = {},
   webgl2 = true,
   modules = true,
+  userAgent = '',
+  uaDataMobile = undefined,
+  search = '',
 } = {}) {
   const blocker = {
     innerHTML: '',
@@ -76,10 +85,20 @@ function fakeBrowser({
     createTextNode: (text) => ({ text }),
   };
 
+  const navigator = { maxTouchPoints: touchPoints, userAgent };
+  if (uaDataMobile !== undefined) navigator.userAgentData = { mobile: uaDataMobile };
+
   const window = {
     document,
-    navigator: { maxTouchPoints: touchPoints },
-    matchMedia: (query) => ({ matches: query.includes('coarse') ? coarse : fine }),
+    navigator,
+    location: { search },
+    matchMedia: (query) => {
+      const key = query.replace(/[()]/g, '').trim();
+      if (!(key in media)) {
+        throw new Error('the fake browser was not told about "' + query + '"');
+      }
+      return { matches: media[key] };
+    },
     setTimeout: () => 1,
     clearTimeout: () => {},
     WebGL2RenderingContext: webgl2 ? function WebGL2RenderingContext() {} : undefined,
@@ -88,12 +107,68 @@ function fakeBrowser({
   return { window, document, blocker };
 }
 
+// ---- the devices that matter ----------------------------------------------
+
+// A plain desktop: mouse, no touch hardware at all.
+const DESKTOP = {
+  touchPoints: 0,
+  media: { 'pointer: coarse': false, 'pointer: fine': true, 'any-pointer: fine': true },
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130',
+  uaDataMobile: false,
+};
+
+// Android Chrome. THE case this file previously got wrong: `any-pointer: fine`
+// MATCHES, because the device can take a stylus and the query asks what the
+// hardware is capable of. The old `coarse && !anyFine` test therefore returned
+// false and the phone was handed the interactive version.
+const ANDROID = {
+  touchPoints: 5,
+  media: { 'pointer: coarse': true, 'pointer: fine': false, 'any-pointer: fine': true },
+  userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/130 Mobile',
+  uaDataMobile: true,
+};
+
+// The same phone with Chrome's "Desktop site" requested: userAgentData.mobile
+// flips to false and the UA string becomes a desktop one. The hardware has not
+// changed and it still cannot be played, so it must still get the demo.
+const ANDROID_DESKTOP_SITE = {
+  touchPoints: 5,
+  media: { 'pointer: coarse': true, 'pointer: fine': false, 'any-pointer: fine': true },
+  userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130',
+  uaDataMobile: false,
+};
+
+// iOS Safari: no userAgentData at all.
+const IPHONE = {
+  touchPoints: 5,
+  media: { 'pointer: coarse': true, 'pointer: fine': false, 'any-pointer: fine': false },
+  userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Version/17.0 Safari',
+};
+
+// iPadOS claims to be a Mac and has no userAgentData, so the pointer query is
+// the only thing that catches it.
+const IPAD = {
+  touchPoints: 5,
+  media: { 'pointer: coarse': true, 'pointer: fine': false, 'any-pointer: fine': false },
+  userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/17.0 Safari',
+};
+
+// A Windows laptop with a touchscreen AND a trackpad. Must get the real thing:
+// the PRIMARY pointer is the trackpad. This is the case `any-pointer` was
+// brought in to handle, and `pointer` handles it correctly on its own.
+const TOUCH_LAPTOP = {
+  touchPoints: 10,
+  media: { 'pointer: coarse': false, 'pointer: fine': true, 'any-pointer: fine': true },
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130',
+  uaDataMobile: false,
+};
+
 function load(browser) {
   const source = readFileSync(new URL('../src/preflight.js', import.meta.url), 'utf8');
   const sandbox = {
     window: browser.window,
     document: browser.document,
-    console: { error() {}, log() {} },
+    console: { error() {}, log() {}, info() {}, warn() {} },
     Element: { prototype: { requestPointerLock() {} } },
     HTMLScriptElement: undefined,
   };
@@ -116,12 +191,12 @@ console.log('\npreflight');
   check('no arrow functions', !/=>/.test(code));
   check('no template literals', !/`/.test(code));
   check('no let/const', !/\b(let|const)\s+\w+\s*=/.test(code));
-  check('parses and runs as a classic script', typeof load(fakeBrowser()) === 'object');
+  check('parses and runs as a classic script', typeof load(fakeBrowser(DESKTOP)) === 'object');
 }
 
 // --- the decision table -----------------------------------------------------
 
-const { evaluate } = load(fakeBrowser())._internals;
+const { evaluate } = load(fakeBrowser(DESKTOP))._internals;
 
 const ok = {
   modules: true,
@@ -150,7 +225,7 @@ const verdict = (overrides) => {
   check('no modules is rejected', verdict({ modules: false }) === 'browser-too-old');
   check(
     'a browser without modules is detected as such',
-    load(fakeBrowser({ modules: false }))._internals.detect().modules === false
+    load(fakeBrowser({ ...DESKTOP, modules: false }))._internals.detect().modules === false
   );
   check('no import maps is rejected', verdict({ importMaps: false }) === 'browser-too-old');
   check('no WebGL2 is rejected', verdict({ webgl2: false }) === 'no-webgl2');
@@ -189,41 +264,73 @@ const verdict = (overrides) => {
 
 // --- detection on simulated devices ----------------------------------------
 {
-  // A desktop: no touch points at all.
-  const desktop = load(fakeBrowser({ touchPoints: 0, fine: true }))._internals.detect();
-  check('desktop is not seen as touch-only', desktop.touchOnly === false);
-  check('desktop finds WebGL2', desktop.webgl2 === true);
+  const touchOnly = (profile) => load(fakeBrowser(profile))._internals.detect().touchOnly;
 
-  // A tablet: touch points, coarse pointer, no fine pointer anywhere.
-  const tablet = load(
-    fakeBrowser({ touchPoints: 5, coarse: true, fine: false })
-  )._internals.detect();
-  check('tablet is seen as touch-only', tablet.touchOnly === true);
+  check('a desktop gets the interactive version', touchOnly(DESKTOP) === false);
 
-  // A touchscreen laptop: touch points AND a trackpad. Must be allowed through
-  // — this is the false positive the check is deliberately biased against.
-  const hybrid = load(
-    fakeBrowser({ touchPoints: 10, coarse: true, fine: true })
-  )._internals.detect();
-  check('touchscreen laptop is NOT seen as touch-only', hybrid.touchOnly === false);
+  // The regression. This is the check that would have caught the bug that
+  // shipped: an Android phone shown a desktop welcome screen that does nothing
+  // at all when tapped.
+  check('an Android phone gets the demo', touchOnly(ANDROID) === true);
+  check(
+    'an Android phone gets the demo even in Desktop-site mode',
+    touchOnly(ANDROID_DESKTOP_SITE) === true
+  );
+  check('an iPhone gets the demo', touchOnly(IPHONE) === true);
+  check('an iPad gets the demo despite claiming to be a Mac', touchOnly(IPAD) === true);
 
-  // Hardware acceleration off.
-  const noGpu = load(fakeBrowser({ webgl2: false }))._internals.detect();
-  check('missing WebGL2 is detected', noGpu.webgl2 === false);
+  // The other direction, which must not regress while fixing the above.
+  check(
+    'a touchscreen laptop still gets the interactive version',
+    touchOnly(TOUCH_LAPTOP) === false
+  );
+
+  // any-pointer must no longer be consulted at all: it is true on both a phone
+  // and a laptop, so it cannot separate them, and believing it was the bug.
+  const source = readFileSync(new URL('../src/preflight.js', import.meta.url), 'utf8');
+  check('any-pointer is no longer consulted', !/any-pointer/.test(source.replace(/\/\/.*$/gm, '')));
+
+  // Every profile must still find WebGL2, which the demo needs as much as the
+  // interactive version does.
+  for (const [name, profile] of Object.entries({ DESKTOP, ANDROID, IPHONE, IPAD })) {
+    check(name + ' finds WebGL2', load(fakeBrowser(profile))._internals.detect().webgl2 === true);
+  }
+}
+
+// --- the ?mode= override ----------------------------------------------------
+{
+  const env = (profile, search) => load(fakeBrowser({ ...profile, search }))._internals.detect();
+
+  check(
+    'a phone can be forced into the interactive version',
+    env(ANDROID, '?mode=interactive').touchOnly === false
+  );
+  check('a desktop can be forced into the demo', env(DESKTOP, '?mode=demo').touchOnly === true);
+  check(
+    'an override is recorded, so the console can say so',
+    env(DESKTOP, '?mode=demo').forcedMode === 'demo' &&
+      env(DESKTOP, '?mode=demo').detectedTouchOnly === false
+  );
+  check('an unknown mode is ignored', env(ANDROID, '?mode=banana').touchOnly === true);
+  check('no query string is ignored', env(ANDROID, '').forcedMode === null);
+  check(
+    'the override survives other query parameters',
+    env(DESKTOP, '?foo=1&mode=demo&bar=2').touchOnly === true
+  );
 }
 
 // --- the screen -------------------------------------------------------------
 {
   // A rejected browser must actually have the overlay rewritten, and the
   // application must be told not to start.
-  const browser = fakeBrowser({ webgl2: false });
+  const browser = fakeBrowser({ ...DESKTOP, webgl2: false });
   const api = load(browser);
   check('a failed preflight reports not-ok', api.ok() === false);
   check('a failed preflight writes the overlay', browser.blocker.children.length === 1);
   check('the overlay is marked as an error', browser.blocker.className === 'error');
 
   // A passing browser must be left alone, welcome screen intact.
-  const good = fakeBrowser();
+  const good = fakeBrowser(DESKTOP);
   const goodApi = load(good);
   check('a passing preflight reports ok', goodApi.ok() === true);
   check('a passing preflight leaves the welcome screen', good.blocker.children.length === 0);
@@ -233,7 +340,7 @@ const verdict = (overrides) => {
   // would eventually disagree; this is the single one.
   check('a desktop publishes touchOnly false', goodApi.env().touchOnly === false);
 
-  const phone = load(fakeBrowser({ touchPoints: 5, coarse: true, fine: false }));
+  const phone = load(fakeBrowser(ANDROID));
   check('a phone passes the preflight', phone.ok() === true);
   check('a phone publishes touchOnly true', phone.env().touchOnly === true);
 
@@ -247,7 +354,7 @@ const verdict = (overrides) => {
   check('only the first report is shown', good.blocker.children.length === 1);
 
   // An unknown code must still produce a screen rather than a blank one.
-  const odd = fakeBrowser();
+  const odd = fakeBrowser(DESKTOP);
   const oddApi = load(odd);
   oddApi.fail('something-nobody-defined', new Error('?'));
   check('an unknown failure code still explains itself', odd.blocker.children.length === 1);
