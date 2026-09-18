@@ -157,6 +157,29 @@ canvas {
   display: none;
 }
 
+/* The escape hatch out of the demo. Quiet and permanent: it must still be
+   there for a visitor who arrives five minutes in, which is why it is a
+   separate element from the note that fades. */
+#demo-switch {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(6, 9, 14, 0.6);
+  color: #cfe6ff;
+  font: 13px/1 system-ui, sans-serif;
+  text-decoration: none;
+  opacity: 0.75;
+}
+
+#demo-switch.hidden {
+  display: none;
+}
+
 /* The preflight's error state, written in by preflight.js when the browser
    cannot run the world.
 

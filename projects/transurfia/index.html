@@ -15,6 +15,13 @@
         <strong>Interactive exploration is available on desktop.</strong>
         <span>You're viewing an automatic demonstration of the surface.</span>
       </div>
+
+      <!-- The way out of the demo, and deliberately NOT inside #demo-note,
+           which fades after a few seconds. Device detection has now been wrong
+           twice on real hardware; whatever it decides, a visitor who can see
+           this is one tap from the version they wanted, and does not have to
+           know that ?mode= exists. -->
+      <a id="demo-switch" class="hidden" href="?mode=interactive">Play it yourself &rsaquo;</a>
       <div id="blocker">
         <div>
           <h1>Welcome to Transurfia</h1>

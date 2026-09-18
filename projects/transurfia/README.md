@@ -36,6 +36,20 @@ locked to the window, and turning is measured in mouse pixels. So touch devices
 get a **guided demo** instead: the player walks a fixed 34-second route through
 three different edge gluings while you watch, looping until you leave.
 
+Which version a device gets is decided by the OPERATING SYSTEM, not by pointer
+media queries. Two earlier attempts trusted those and both were wrong on real
+hardware: `any-pointer: fine` matches on Android (a phone can take a stylus), so
+every Android phone was sent to the desktop version; and `pointer: coarse`
+matches on a Surface Pro even with the Type Cover attached, so a real computer
+was sent to the demo. The queries describe input hardware hedged by what might
+be plugged in later, which is not the question. The pointer queries are now
+consulted only as a tie-breaker among desktop-class systems, where the single
+genuine case is a Windows or ChromeOS tablet with nothing attached.
+
+Whatever it decides, **`?mode=demo` and `?mode=interactive` override it**, the
+demo carries a permanent "Play it yourself" link, and one `console.info` line on
+every load says which mode was chosen and what the device reported.
+
 It is not a recording, and it is not a second implementation. `src/autoplayer.js`
 presses the real player's movement keys and turns its head, then lets
 `player.update()` run exactly as it does for a human — same resolver, same

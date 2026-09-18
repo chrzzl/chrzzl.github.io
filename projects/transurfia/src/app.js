@@ -207,6 +207,12 @@ export function createApp() {
   }
 
   function showDemoNote() {
+    // The switch out of the demo. Revealed and then left alone: it is the only
+    // recourse for a device the detection got wrong, so it must not fade with
+    // the note or a visitor arriving mid-lap would never see it.
+    const to = document.getElementById('demo-switch');
+    if (to) to.classList.remove('hidden');
+
     const note = document.getElementById('demo-note');
     if (!note) return;
 

@@ -72,49 +72,84 @@
     return typeof Element !== 'undefined' && 'requestPointerLock' in Element.prototype;
   }
 
-  // Is the main way of pointing at this device a finger?
+  // Is this a device that cannot be played on?
   //
-  // The first version of this asked for three things at once: touch points, a
-  // coarse PRIMARY pointer, and no fine pointer anywhere (`any-pointer: fine`).
-  // The last of those made it useless. Android Chrome reports `any-pointer:
-  // fine` as matching — a phone can take a stylus, and the query asks what the
-  // device is CAPABLE of, not what is in the user's hand — so every Android
-  // phone failed the test and was handed the interactive version it cannot
-  // drive: a welcome screen that does nothing when tapped. The check was
-  // written to fail safe and failed in the one direction that leaves a visitor
-  // with nothing.
+  // Two attempts at this were wrong on real hardware, both times by trusting a
+  // pointer media query to describe the device:
   //
-  // `any-pointer` is the wrong family of query for this question. What matters
-  // is the primary pointer, which is what `pointer` means, and which already
-  // gives the right answer for the case `any-pointer` was brought in to
-  // handle: on a laptop with a touchscreen and a trackpad the primary pointer
-  // is the trackpad, so `pointer: coarse` does not match and it correctly gets
-  // the real thing.
+  //   `any-pointer: fine` must be false      -> broke every Android phone.
+  //      The query asks what the hardware CAN do, and a phone can take a
+  //      stylus, so it matched and the phone was sent to the desktop version.
   //
-  // Three signals, best first.
-  function isTouchOnly() {
+  //   `pointer: coarse` must be true         -> broke the Surface Pro.
+  //      Windows reports a coarse primary pointer on a Surface even with the
+  //      Type Cover attached, so a real computer with a real keyboard and
+  //      trackpad was sent to the demo.
+  //
+  // The lesson is that the pointer queries do not answer the question being
+  // asked. They describe input hardware, hedged by what might be plugged in or
+  // clipped on later, and every device in the awkward middle reports something
+  // defensible that happens to be useless here. What actually decides whether
+  // there is a keyboard and a mouse is the OPERATING SYSTEM: Android and iOS
+  // cannot be played on, Windows and macOS can.
+  //
+  // So the OS is decided first, from platform strings, and the pointer queries
+  // are consulted only afterwards, as a tie-breaker among desktop-class
+  // systems. `coarse && !anyFine` is a perfectly good test down there — it was
+  // only ever poisoned by the Android stylus case, which by then has been
+  // ruled out.
+  //
+  // Platform sniffing is unfashionable, and it is the right tool for exactly
+  // this: the question is which OS this is, and that is what platform strings
+  // are for. It is still a guess about the world, so there is also a visible
+  // way out in both directions — see forcedMode() and #demo-switch.
+
+  function isMobileOS() {
     var nav = global.navigator || {};
-
-    // 1. Chromium's own answer (Chrome/Edge 90+, secure contexts). The only
-    //    signal here that is a statement about the device rather than an
-    //    inference from its capabilities.
+    var ua = nav.userAgent || '';
     var uaData = nav.userAgentData;
-    if (uaData && uaData.mobile === true) return true;
+    var platform = (uaData && typeof uaData.platform === 'string' && uaData.platform) || '';
 
-    // 2. A coarse primary pointer, with touch hardware to back it up. Catches
-    //    iOS and iPadOS, which have no userAgentData — and iPadOS, which
-    //    claims to be a Mac, is caught by nothing else.
-    var touchPoints = nav.maxTouchPoints || 0;
-    if (touchPoints > 0 && global.matchMedia &&
-        global.matchMedia('(pointer: coarse)').matches) {
+    // Chromium's structured answer, where it exists (Chrome/Edge 90+, secure
+    // contexts). Preferred over the UA string because it survives the UA
+    // reduction that is steadily hollowing that string out.
+    if (platform === 'Android') return true;
+
+    if (/Android|iPhone|iPod/i.test(ua)) return true;
+    if (/iPad/i.test(ua)) return true;
+
+    // iPadOS 13 and later report themselves as a Mac, and no other signal
+    // catches them. A Mac with a touchscreen does not exist, so touch points on
+    // something claiming to be a Mac mean an iPad.
+    if ((/Mac/i.test(platform) || /Macintosh/i.test(ua)) && (nav.maxTouchPoints || 0) > 1) {
       return true;
     }
 
-    // 3. The user agent string, consulted only when both better signals have
-    //    come up empty. Sniffing is a last resort, but "no signal at all"
-    //    should not silently mean "desktop" on a device that says outright
-    //    what it is.
-    return /Android|iPhone|iPod|Windows Phone/i.test(nav.userAgent || '');
+    // Last: the mobile flag. It is a weaker signal than the platform — Chrome's
+    // "Desktop site" switch clears it on a phone whose hardware has not changed
+    // — so it only ever adds a yes, never a no.
+    if (uaData && uaData.mobile === true) return true;
+
+    return false;
+  }
+
+  function isTouchOnly() {
+    if (isMobileOS()) return true;
+
+    // A desktop-class OS. Almost always playable, with one real exception: a
+    // Windows or ChromeOS tablet with nothing attached to it. Both queries are
+    // required, and they are asking different things — is the pointer the user
+    // is EXPECTED to use a coarse one, and is there no fine pointer anywhere on
+    // the device at all. A Surface with its keyboard on answers yes then yes,
+    // and so stays interactive.
+    var touchPoints = (global.navigator && global.navigator.maxTouchPoints) || 0;
+    if (touchPoints === 0) return false;
+    if (!global.matchMedia) return false;
+
+    return (
+      global.matchMedia('(pointer: coarse)').matches &&
+      !global.matchMedia('(any-pointer: fine)').matches
+    );
   }
 
   // ?mode=demo and ?mode=interactive override the detection.
@@ -155,6 +190,8 @@
   function detect() {
     var forced = forcedMode();
     var detected = isTouchOnly();
+    var nav = global.navigator || {};
+    var uaData = nav.userAgentData;
 
     return {
       modules: supportsModules(),
@@ -163,6 +200,10 @@
       touchOnly: forced === null ? detected : forced === 'demo',
       detectedTouchOnly: detected,
       forcedMode: forced,
+      mobileOS: isMobileOS(),
+      // Recorded purely so that a report of "wrong mode on my device" can be
+      // answered from the console line below instead of from a second device.
+      platform: (uaData && uaData.platform) || '',
       webgl2: probeWebGL2(),
     };
   }
@@ -338,8 +379,9 @@
         (env.touchOnly ? 'guided demo' : 'interactive') +
         (env.forcedMode ? ' (forced by ?mode=' + env.forcedMode + ')' : '') +
         ' | touch=' + env.detectedTouchOnly +
+        ' mobileOS=' + env.mobileOS +
+        ' platform=' + (env.platform || '?') +
         ' webgl2=' + env.webgl2 +
-        ' pointerLock=' + env.pointerLock +
         ' | override with ?mode=demo or ?mode=interactive'
     );
 

@@ -49,6 +49,7 @@ function fakeBrowser({
   modules = true,
   userAgent = '',
   uaDataMobile = undefined,
+  uaDataPlatform = undefined,
   search = '',
 } = {}) {
   const blocker = {
@@ -86,7 +87,9 @@ function fakeBrowser({
   };
 
   const navigator = { maxTouchPoints: touchPoints, userAgent };
-  if (uaDataMobile !== undefined) navigator.userAgentData = { mobile: uaDataMobile };
+  if (uaDataMobile !== undefined || uaDataPlatform !== undefined) {
+    navigator.userAgentData = { mobile: uaDataMobile, platform: uaDataPlatform };
+  }
 
   const window = {
     document,
@@ -115,6 +118,7 @@ const DESKTOP = {
   media: { 'pointer: coarse': false, 'pointer: fine': true, 'any-pointer: fine': true },
   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130',
   uaDataMobile: false,
+  uaDataPlatform: 'Windows',
 };
 
 // Android Chrome. THE case this file previously got wrong: `any-pointer: fine`
@@ -126,6 +130,7 @@ const ANDROID = {
   media: { 'pointer: coarse': true, 'pointer: fine': false, 'any-pointer: fine': true },
   userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/130 Mobile',
   uaDataMobile: true,
+  uaDataPlatform: 'Android',
 };
 
 // The same phone with Chrome's "Desktop site" requested: userAgentData.mobile
@@ -136,6 +141,9 @@ const ANDROID_DESKTOP_SITE = {
   media: { 'pointer: coarse': true, 'pointer: fine': false, 'any-pointer: fine': true },
   userAgent: 'Mozilla/5.0 (X11; Linux x86_64) Chrome/130',
   uaDataMobile: false,
+  // Desktop-site mode clears the mobile flag but not the platform, which is
+  // why the platform is the signal that is trusted first.
+  uaDataPlatform: 'Android',
 };
 
 // iOS Safari: no userAgentData at all.
@@ -161,6 +169,38 @@ const TOUCH_LAPTOP = {
   media: { 'pointer: coarse': false, 'pointer: fine': true, 'any-pointer: fine': true },
   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130',
   uaDataMobile: false,
+  uaDataPlatform: 'Windows',
+};
+
+// A Surface Pro with the Type Cover attached, in Edge. THE second case this
+// got wrong: Windows reports a COARSE primary pointer on a Surface even with a
+// keyboard and trackpad clipped on, so the `pointer: coarse` test sent a real
+// computer to the demo. Caught now by the platform being Windows, and, if the
+// platform string were ever missing, by `any-pointer: fine` from the trackpad.
+const SURFACE_WITH_KEYBOARD = {
+  touchPoints: 10,
+  media: { 'pointer: coarse': true, 'pointer: fine': false, 'any-pointer: fine': true },
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130 Edg/130',
+  uaDataMobile: false,
+  uaDataPlatform: 'Windows',
+};
+
+// The same tablet with nothing attached: no fine pointer anywhere on the
+// device. The one desktop-class case that genuinely cannot be played, and the
+// reason the pointer queries are still consulted at all.
+const WINDOWS_TABLET_BARE = {
+  touchPoints: 10,
+  media: { 'pointer: coarse': true, 'pointer: fine': false, 'any-pointer: fine': false },
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130 Edg/130',
+  uaDataMobile: false,
+  uaDataPlatform: 'Windows',
+};
+
+// A Mac. Must never be mistaken for an iPad: no touch points.
+const MAC = {
+  touchPoints: 0,
+  media: { 'pointer: coarse': false, 'pointer: fine': true, 'any-pointer: fine': true },
+  userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Version/17.0 Safari',
 };
 
 function load(browser) {
@@ -265,6 +305,7 @@ const verdict = (overrides) => {
 // --- detection on simulated devices ----------------------------------------
 {
   const touchOnly = (profile) => load(fakeBrowser(profile))._internals.detect().touchOnly;
+  const source = readFileSync(new URL('../src/preflight.js', import.meta.url), 'utf8');
 
   check('a desktop gets the interactive version', touchOnly(DESKTOP) === false);
 
@@ -285,14 +326,37 @@ const verdict = (overrides) => {
     touchOnly(TOUCH_LAPTOP) === false
   );
 
-  // any-pointer must no longer be consulted at all: it is true on both a phone
-  // and a laptop, so it cannot separate them, and believing it was the bug.
-  const source = readFileSync(new URL('../src/preflight.js', import.meta.url), 'utf8');
-  check('any-pointer is no longer consulted', !/any-pointer/.test(source.replace(/\/\/.*$/gm, '')));
+  // The second regression. A Surface Pro with its keyboard on is a real
+  // computer and reports a coarse primary pointer anyway.
+  check(
+    'a Surface Pro with a keyboard gets the interactive version',
+    touchOnly(SURFACE_WITH_KEYBOARD) === false
+  );
+
+  // ...but the same tablet with nothing attached cannot be played on, and this
+  // is the only desktop-class case where the pointer queries still decide.
+  check('a bare Windows tablet gets the demo', touchOnly(WINDOWS_TABLET_BARE) === true);
+
+  check('a Mac gets the interactive version', touchOnly(MAC) === false);
+
+  // The iPad rule is "claims to be a Mac AND has touch points". A real Mac
+  // must not trip it, which is what separates the two profiles above.
+  check(
+    'the iPad rule needs touch points, not just a Mac platform',
+    touchOnly(IPAD) === true && touchOnly(MAC) === false
+  );
+
+  // Neither pointer query may be consulted before the OS has been decided:
+  // one is wrong on Android, the other on Surface, and the ordering is the
+  // whole fix.
+  check(
+    'the OS is decided before any pointer query',
+    source.indexOf('function isMobileOS') < source.indexOf("matchMedia('(pointer: coarse)')")
+  );
 
   // Every profile must still find WebGL2, which the demo needs as much as the
   // interactive version does.
-  for (const [name, profile] of Object.entries({ DESKTOP, ANDROID, IPHONE, IPAD })) {
+  for (const [name, profile] of Object.entries({ DESKTOP, ANDROID, IPHONE, IPAD, SURFACE_WITH_KEYBOARD })) {
     check(name + ' finds WebGL2', load(fakeBrowser(profile))._internals.detect().webgl2 === true);
   }
 }
