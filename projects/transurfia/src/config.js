@@ -477,7 +477,14 @@ export const RENDER = {
   //
   // This is a CEILING, not a setting. What the renderer actually uses is chosen
   // at run time by the adaptive controller below, which never exceeds it.
-  maxPixelRatio: 1.5,
+  //
+  // 2.0 rather than 1.5 so that a Retina-class display can be rendered at its
+  // native resolution instead of being permanently upscaled from below it.
+  // There is no antialiasing to fall back on here — see the note on
+  // minPixelRatio — so resolution IS image quality, and a machine that cannot
+  // afford this will be walked back down by the controller within a couple of
+  // seconds anyway.
+  maxPixelRatio: 2.0,
 
   // Ceiling on touch devices, which run the guided demo (see DEMO below).
   //
@@ -489,6 +496,14 @@ export const RENDER = {
   // starts moving immediately and there is no welcome screen to hide the first
   // few seconds behind.
   mobileMaxPixelRatio: 1.0,
+
+  // The floor on touch devices, which is lower than the desktop one.
+  //
+  // The demo is watched rather than played, on a small screen, at arm's length
+  // — softness costs less there than it does on a monitor — and a weak phone
+  // needs somewhere to go. On a desktop the same value produced the artefact
+  // this pair of settings exists to prevent.
+  mobileMinPixelRatio: 0.5,
 
   // Adaptive quality. See quality.js, which owns the logic; these are all of
   // its dials in one place.
@@ -507,10 +522,28 @@ export const RENDER = {
     // Turn the whole thing off and pin rendering at maxPixelRatio.
     enabled: true,
 
-    // The floor. Below roughly half ratio the tile textures start to alias
-    // badly enough that the surface becomes hard to read, which defeats the
-    // point of the world — better a slow frame rate than an illegible one.
-    minPixelRatio: 0.5,
+    // The floor.
+    //
+    // Raised from 0.5, which was too low and was reached in practice: on a 4K
+    // display the ray tracer cannot hold the old 50fps target at full
+    // resolution, so the controller walked down every rung of the ladder over
+    // about fifteen seconds and sat at the bottom. 0.5 renders 11% of a
+    // 150%-scaled 4K display's pixels, one rendered pixel covering 2x2 CSS
+    // pixels, and it looks like it. The original note here said that below
+    // roughly half ratio the surface becomes hard to read, and then set the
+    // floor at exactly that point.
+    //
+    // It matters more here than in most renderers because there is no
+    // antialiasing to soften the loss and no way to add any cheaply. The image
+    // is computed by a fragment shader over a fullscreen quad, so MSAA does
+    // nothing at all — it antialiases geometry edges, and there is one piece of
+    // geometry, the quad. Supersampling is the only antialiasing available, and
+    // supersampling is what the pixel ratio IS. Lowering it is therefore not a
+    // quality setting with a fallback; it is the fallback.
+    //
+    // 0.75 costs roughly a third fewer pixels than 1.0 while staying visibly
+    // soft rather than blocky, and the ladder below it has been removed.
+    minPixelRatio: 0.75,
 
     // Where to start, before anything has been measured. Null means "at the
     // ceiling": a capable machine is never made to look soft while the
@@ -526,8 +559,31 @@ export const RENDER = {
     // it when it sits above `upgradeFps`. The gap between them is a dead band
     // where nothing happens at all, and it is the first line of defence
     // against oscillation: a machine that lands inside it stays put forever.
-    targetFps: 50,
-    upgradeFps: 75,
+    // Lowered from 50/75, which were wrong for this content in both
+    // directions. A target of 50 is a demand a per-pixel ray tracer cannot
+    // meet at 4K on ordinary hardware, so it guaranteed the slide to the floor
+    // described above; and 75 as the bar for climbing back is above the refresh
+    // rate of most displays, which meant a 60Hz monitor could NEVER earn an
+    // upgrade however capable its GPU — measured frame rate is capped by vsync,
+    // so the condition was unsatisfiable and every downgrade was permanent.
+    //
+    // 40 is still comfortable for walking around a world at 2.5 units per
+    // second, and 55 sits below 60Hz so that recovery is actually reachable.
+    targetFps: 40,
+    upgradeFps: 55,
+
+    // Fraction of the highest frame rate seen so far that counts as "pinned at
+    // the refresh rate, so the GPU has headroom". This is what makes recovery
+    // possible at all on a 60Hz display, where requestAnimationFrame caps the
+    // measurable frame rate well below any ambitious absolute threshold. See
+    // the long note at the upgrade test in quality.js.
+    vsyncMargin: 0.97,
+
+    // The lowest frame rate that could plausibly BE a display refresh rate.
+    // Real panels run at 50Hz and upward; anything below this is the GPU's own
+    // limit, and must not be mistaken for the comfortable, vsync-capped idling
+    // that earns an upgrade.
+    minRefreshFps: 48,
 
     // How long a verdict has to hold before it is acted on. Asymmetric on
     // purpose — a struggling machine should be rescued quickly, while a
@@ -564,11 +620,20 @@ export const RENDER = {
     smoothingSeconds: 0.5,
 
     // If an upgrade has to be undone within this long, the rung it went to is
-    // marked unreachable for the rest of the session. Without it a machine
-    // sitting exactly on the boundary would breathe between two resolutions
-    // indefinitely, which is far more distracting than simply running at the
-    // lower one.
+    // marked unreachable. Without it a machine sitting exactly on the boundary
+    // would breathe between two resolutions indefinitely, which is far more
+    // distracting than simply running at the lower one.
     oscillationGuardSeconds: 20,
+
+    // ...but not unreachable for ever. "This machine cannot hold that rung" is
+    // true of the machine as it is at that moment, and the cause is usually
+    // temporary — another application, a video call, battery saver. After this
+    // long at a comfortable frame rate with nowhere to go, the lockout is
+    // lifted and the rung is tried once more. Each failed attempt doubles the
+    // wait, up to the maximum, so a machine that genuinely cannot manage it
+    // ends up asking roughly twice an hour rather than every other minute.
+    ceilingRelaxSeconds: 90,
+    ceilingRelaxMaxSeconds: 1800,
   },
 
   // Draw a thin darker seam along tile boundaries. It is the clearest cue for

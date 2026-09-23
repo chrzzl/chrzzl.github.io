@@ -64,9 +64,29 @@ screen whichever is missing.
 
 Render resolution adapts to the frame rate it is actually achieving, so
 integrated graphics, 4K displays, GPU-less VMs and phones degrade in sharpness
-rather than in playability. Thresholds live in `RENDER.adaptive`; the ceiling is
-`RENDER.maxPixelRatio` on desktop and the lower `RENDER.mobileMaxPixelRatio` for
-the demo.
+rather than in playability. Thresholds live in `RENDER.adaptive`; both ends of
+the ladder differ per experience (`maxPixelRatio`/`adaptive.minPixelRatio` on
+desktop, `mobileMaxPixelRatio`/`mobileMinPixelRatio` for the demo).
+
+Resolution is load-bearing for image quality here in a way it is not in most
+renderers. The image is a fragment shader over a single fullscreen quad, so MSAA
+does nothing at all — it antialiases geometry edges, and there is one piece of
+geometry. Supersampling is the only antialiasing available, and supersampling is
+what the pixel ratio *is*. Lowering it is not a quality setting with a fallback;
+it is the fallback. Two consequences worth knowing:
+
+- The floor is 0.75, not 0.5. At 0.5 one rendered pixel covers 2x2 CSS pixels
+  and the surface stops being readable.
+- The upgrade threshold must stay **below 60**. `requestAnimationFrame` is
+  capped at the display refresh rate, so a threshold above it is a condition
+  that can never be true — which made every downgrade permanent on a 60Hz
+  display and ratcheted quality to the floor. `tools/quality.selfcheck.mjs`
+  caps every simulated machine at 60fps for exactly this reason.
+
+Tile textures use anisotropic filtering at the GPU's maximum. The world is a
+floor receding to the horizon, which is the grazing-angle case anisotropy exists
+for; without it distance is blurred along the axis that did not need it and
+shimmers as the player walks.
 
 ## Self-checks
 

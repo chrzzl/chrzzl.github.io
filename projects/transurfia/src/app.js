@@ -7,7 +7,9 @@ import {
 import { createLShapeSurface } from './surface.js';
 import { createRayTracer } from './raytracer.js';
 import { createMinimap } from './minimap.js';
-import { loadTextureSet, textureSetReady, nextTextureSet, textureSetNames } from './textures.js';
+import {
+  loadTextureSet, textureSetReady, nextTextureSet, textureSetNames, setAnisotropy,
+} from './textures.js';
 import { PlayerController } from './player.js';
 import { createQualityController } from './quality.js';
 import { createAutoPlayer } from './autoplayer.js';
@@ -73,6 +75,16 @@ export function createApp() {
 
   app.appendChild(renderer.domElement);
 
+  // Anisotropic filtering, at whatever level this GPU offers.
+  //
+  // Set before any texture is loaded, and it matters more here than in most
+  // scenes: the whole world is a floor receding to the horizon, which is the
+  // grazing-angle case anisotropy exists for. Without it the mip level is
+  // chosen from the larger screen-space derivative, so distance is blurred
+  // along the axis that did not need it and shimmers as the player walks.
+  // See the note in textures.js.
+  setAnisotropy(renderer.capabilities.getMaxAnisotropy());
+
   // A lost context is a driver reset, a GPU hot-unplug, or the browser reaping
   // a background tab's context. The frame loop would otherwise keep running
   // against a dead context and simply show the last frame forever, which looks
@@ -99,13 +111,19 @@ export function createApp() {
   // Chooses the pixel ratio to render at, from frame times. See quality.js;
   // every threshold is in RENDER.adaptive. Disabled, the renderer simply pins
   // itself to the ceiling, which is what it always used to do.
+  // Both ends of the ladder differ between the two experiences. The demo is
+  // watched on a small screen, so it starts lower and is allowed to sink
+  // further; the interactive version is looked at closely on a monitor, where
+  // the floor has to stay somewhere the surface is still legible.
   const pixelCeiling = demoMode ? RENDER.mobileMaxPixelRatio : RENDER.maxPixelRatio;
+  const pixelFloor = demoMode ? RENDER.mobileMinPixelRatio : RENDER.adaptive.minPixelRatio;
 
   const quality = RENDER.adaptive.enabled
     ? createQualityController({
-        maxPixelRatio: pixelCeiling,
-        deviceRatio: window.devicePixelRatio || 1,
         ...RENDER.adaptive,
+        maxPixelRatio: pixelCeiling,
+        minPixelRatio: pixelFloor,
+        deviceRatio: window.devicePixelRatio || 1,
       })
     : null;
 

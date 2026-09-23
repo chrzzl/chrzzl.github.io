@@ -36,8 +36,18 @@ function buildLadder(top, min, step) {
     r *= step;
     ladder.push(r);
   }
+
   // The floor is always reachable exactly, however the steps happen to land.
-  if (ladder[ladder.length - 1] > min) ladder.push(min);
+  // If the last computed rung already sits within a few percent of it, that
+  // rung is replaced rather than followed by a near-duplicate: two rungs a
+  // percent apart are one rung as far as the eye is concerned, and all the
+  // second one can do is spend a downgrade cycle achieving nothing.
+  const last = ladder[ladder.length - 1];
+  if (last > min) {
+    if (last < min * 1.05) ladder[ladder.length - 1] = min;
+    else ladder.push(min);
+  }
+
   return ladder;
 }
 
@@ -67,6 +77,10 @@ export function createQualityController(options) {
     maxMeasuredSeconds,
     smoothingSeconds,
     oscillationGuardSeconds,
+    vsyncMargin,
+    minRefreshFps,
+    ceilingRelaxSeconds,
+    ceilingRelaxMaxSeconds,
   } = options;
 
   let deviceRatioNow = deviceRatio;
@@ -96,6 +110,10 @@ export function createQualityController(options) {
   // seconds rather than in frames, which is the unit everything else here is in.
   let avgFrameTime = 0;
 
+  // Highest smoothed frame rate seen this session, which is an estimate of the
+  // display's refresh rate — see the note at the upgrade test below.
+  let bestFps = 0;
+
   let belowFor = 0;
   let aboveFor = 0;
   let settleFor = 0;
@@ -103,6 +121,11 @@ export function createQualityController(options) {
   let spikeRun = 0;
   let clock = 0;
   let lastUpgradeAt = -Infinity;
+
+  // How long a locked-out rung stays locked out. Doubles each time the lockout
+  // has to be reapplied, so a machine that really cannot sustain the rung is
+  // asked about it ever more rarely instead of for ever.
+  let relaxWait = ceilingRelaxSeconds;
 
   function resetTimers() {
     belowFor = 0;
@@ -119,7 +142,24 @@ export function createQualityController(options) {
     // exactly the same answer a few seconds later. Nail the ceiling below it.
     // This is what stops the controller breathing between two resolutions for
     // as long as the page is open.
-    if (clock - lastUpgradeAt < oscillationGuardSeconds) ceiling = index + 1;
+    //
+    // Not for ever, though — see the relaxation in frame(). "Cannot sustain
+    // this rung" is a statement about the machine AS IT IS NOW, and the thing
+    // that made it true is often temporary: another application, a video call,
+    // a laptop on battery saver. A permanent verdict means a session that
+    // starts under load is stuck with the consequences hours later. So the
+    // lockout expires, and `relaxWait` doubles each time it has to be
+    // reimposed, which is what keeps a genuinely incapable machine from
+    // retrying on a loop.
+    if (clock - lastUpgradeAt < oscillationGuardSeconds) {
+      ceiling = index + 1;
+      relaxWait = Math.min(relaxWait * 2, ceilingRelaxMaxSeconds);
+
+      // Forget the upgrade that just failed. Otherwise the clock keeps running
+      // and the "this upgrade has survived the guard window" test in frame()
+      // would eventually fire for an upgrade that did not survive it at all.
+      lastUpgradeAt = -Infinity;
+    }
 
     index += 1;
     resetTimers();
@@ -150,6 +190,9 @@ export function createQualityController(options) {
         ceiling,
         rungs: ladder.length,
         fps: avgFrameTime > 0 ? 1 / avgFrameTime : 0,
+        // The estimated refresh cap, so a HUD can say whether a low frame rate
+        // is the GPU struggling or just the display's own limit.
+        bestFps,
       };
     },
 
@@ -220,10 +263,38 @@ export function createQualityController(options) {
       avgFrameTime = avgFrameTime === 0 ? dt : avgFrameTime + alpha * (dt - avgFrameTime);
       const fps = 1 / avgFrameTime;
 
+      // requestAnimationFrame is capped at the display's refresh rate, so the
+      // frame rate measured here has a ceiling that has nothing to do with the
+      // GPU: a machine with an enormous amount of headroom on a 60Hz monitor
+      // reports exactly 60, the same as a machine with none to spare.
+      //
+      // This is not a detail. The upgrade test used to be `fps > 75`, which on
+      // any 60Hz or 75Hz display is a condition that CANNOT BE TRUE, so every
+      // downgrade was permanent for the rest of the session and quality only
+      // ever ratcheted downward. That is the bug behind "after a while the
+      // columns and the distance go pixelated": not one bad decision but an
+      // absorbing state at the bottom of the ladder.
+      //
+      // Being pinned at the refresh rate is itself the signal worth acting on —
+      // it means the frame finished early and went to sleep waiting for vsync,
+      // which is exactly the headroom an upgrade needs. So the highest rate
+      // ever seen is taken as an estimate of that cap, and sitting within
+      // `vsyncMargin` of it counts as comfortable however low the cap happens
+      // to be. That works on 60Hz, on 144Hz, and on a throttled tab, none of
+      // which an absolute threshold can cover at once.
+      bestFps = Math.max(bestFps, fps);
+
+      // `bestFps` is only evidence of a refresh cap if it is high enough to BE
+      // one. A machine that has never exceeded 35fps is sitting at its own
+      // limit, not the display's, and without this guard it would qualify as
+      // "pinned at its best, so it has headroom" and be handed upgrades it
+      // cannot pay for — the same mistake as before, inverted.
+      const vsyncLimited = bestFps >= minRefreshFps && fps >= bestFps * vsyncMargin;
+
       if (fps < targetFps) {
         belowFor += dt;
         aboveFor = 0;
-      } else if (fps > upgradeFps) {
+      } else if (fps > upgradeFps || vsyncLimited) {
         aboveFor += dt;
         belowFor = 0;
       } else {
@@ -236,6 +307,27 @@ export function createQualityController(options) {
 
       if (belowFor >= downgradeAfterSeconds && downgrade()) return ladder[index];
       if (aboveFor >= upgradeAfterSeconds && upgrade()) return ladder[index];
+
+      // An upgrade that has outlived the oscillation guard is evidence that
+      // the machine genuinely improved, rather than that it briefly looked
+      // like it had. The patience accumulated from earlier failures was a
+      // response to conditions that no longer hold, so it is handed back —
+      // without this, a session that spent its first ten minutes under load
+      // would still be waiting half an hour per rung long after the load went
+      // away.
+      if (lastUpgradeAt > -Infinity && clock - lastUpgradeAt > oscillationGuardSeconds) {
+        relaxWait = ceilingRelaxSeconds;
+      }
+
+      // Sustained comfort with nowhere to go means the ceiling above is the
+      // only thing holding quality down. Open it by one rung and let the
+      // ordinary upgrade path have another go; if the rung still cannot be
+      // held, downgrade() will shut it again and wait twice as long.
+      if (ceiling > 0 && aboveFor >= relaxWait) {
+        ceiling -= 1;
+        aboveFor = 0;
+      }
+
       return null;
     },
   };

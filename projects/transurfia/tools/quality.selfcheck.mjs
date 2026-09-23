@@ -55,11 +55,20 @@ function run(q, seconds, frameTimeFor) {
   return { changes, ratios, final: q.current(), stats: q.stats() };
 }
 
-const fixed = (fps) => () => 1 / fps;
+// requestAnimationFrame is capped at the display's refresh rate, so no real
+// machine reports more than its panel can show. Every simulated machine below
+// is capped accordingly, and that is not decoration: the shipped bug was an
+// upgrade threshold of 75fps, which no 60Hz display can ever reach, and the
+// test that was supposed to cover recovery fed it 240fps and passed. A test
+// may not use a frame rate that hardware cannot produce.
+const REFRESH_HZ = 60;
+
+const capped = (fps) => Math.min(fps, REFRESH_HZ);
+const fixed = (fps) => () => 1 / capped(fps);
 
 // A machine that manages `fpsAtRatio1` at pixel ratio 1.0, scaling
-// quadratically with resolution.
-const quadratic = (fpsAtRatio1) => (ratio) => (ratio * ratio) / fpsAtRatio1;
+// quadratically with resolution, then vsync-capped like a real one.
+const quadratic = (fpsAtRatio1) => (ratio) => 1 / capped(fpsAtRatio1 / (ratio * ratio));
 
 console.log('\nadaptive quality');
 
@@ -158,9 +167,24 @@ console.log('\nadaptive quality');
   // long as the page is open. It is allowed to try once; it must then stop.
   const q = controller();
   const top = Math.min(2, RENDER.maxPixelRatio);
-  const boundary = (ratio) => (ratio >= top - 1e-9 ? 1 / 40 : 1 / 90);
+  // Genuinely below the target at full resolution, and vsync-capped below it,
+  // so the machine has real headroom to tempt an upgrade with.
+  const boundary = (ratio) => (ratio >= top - 1e-9 ? 1 / 34 : 1 / REFRESH_HZ);
   const r = run(q, 3600, boundary);
-  check('boundary machine stops oscillating', r.changes <= 3, `${r.changes} changes in an hour`);
+
+  // The claim is no longer "it never changes again" — a locked-out rung is now
+  // retried occasionally, so that a machine whose load lifts is not punished
+  // for the rest of the session. What has to stay true is the thing the guard
+  // was actually for: the visitor is not watching the resolution breathe. So
+  // the measure is how much of the hour was SPENT on the rung it cannot hold,
+  // not how many times it touched it.
+  const atTop = r.ratios.filter((x) => x >= top - 1e-9).length / r.ratios.length;
+  check(
+    'boundary machine spends almost no time on the rung it cannot hold',
+    atTop < 0.05,
+    `${(atTop * 100).toFixed(1)}% of an hour`
+  );
+  check('boundary machine retries rarely', r.changes <= 24, `${r.changes} changes in an hour`);
   check('boundary machine lands on the sustainable rung', r.final < top, `ratio ${r.final}`);
 }
 
@@ -171,10 +195,129 @@ console.log('\nadaptive quality');
   const q = controller();
   run(q, 120, quadratic(20));
   const degraded = q.current();
-  const r = run(q, 600, fixed(240));
+  const r = run(q, 600, fixed(REFRESH_HZ));
   check('quality recovers when the machine speeds up', q.current() > degraded,
     `${degraded} -> ${q.current()}`);
   check('recovery is not instant', r.changes >= 1);
+}
+
+// ---------------------------------------------------------------------------
+{
+  // THE regression. Every downgrade used to be permanent on a 60Hz display:
+  // the upgrade test was `fps > 75`, and requestAnimationFrame cannot report
+  // more than the panel refreshes, so the condition was unsatisfiable and the
+  // bottom of the ladder was an absorbing state. This is what "after a while
+  // the columns and the distance go pixelated" actually was.
+  //
+  // A machine that is heavy at full resolution and then vsync-capped at 60 once
+  // it has stepped down must climb back out.
+  const q = controller();
+  const top = q.current();
+
+  // Phase one: genuinely too slow at every rung, so it walks to the floor
+  // without ever being tempted into an upgrade. Nothing is locked out.
+  run(q, 200, quadratic(20));
+  const degraded = q.current();
+  check('a 60Hz display degrades when it must', degraded < top, `${top} -> ${degraded}`);
+  check(
+    'and degrades all the way to the floor',
+    degraded === RENDER.adaptive.minPixelRatio,
+    `ratio ${degraded}`
+  );
+
+  // Phase two: the load lifts. Comfortable everywhere now, but still capped at
+  // 60fps by the panel — which is the entire point. Under the shipped
+  // thresholds the upgrade test was `fps > 75`, so this could never happen.
+  const r = run(q, 1200, fixed(REFRESH_HZ));
+  check(
+    'a 60Hz display can climb back to the ceiling',
+    q.current() === top,
+    `stuck at ${q.current()} (was ${degraded}); a 60Hz panel cannot exceed 75fps`
+  );
+  check('and climbs one rung at a time', r.changes >= 2);
+}
+
+// ---------------------------------------------------------------------------
+{
+  // A rung that was locked out for oscillating must be retried eventually.
+  // "Cannot sustain that resolution" is true of a machine under whatever load
+  // it is under at the time, and a session that starts busy should not be
+  // penalised for the rest of its life.
+  const q = controller();
+
+  // Heavy above ratio 1.0, comfortable below: the shape that provokes an
+  // upgrade, fails it, and gets the rung locked out.
+  const heavy = (ratio) => 1 / (ratio > 1.0 ? 22 : REFRESH_HZ);
+  const first = run(q, 200, heavy);
+  const locked = q.stats().ceiling;
+  check('an unsustainable rung gets locked out', locked > 0, `ceiling ${locked}`);
+
+  // Left alone under the same load, it must retry — and fail — rather than
+  // never trying again, but must not do it constantly.
+  const retries = run(q, 3600, heavy);
+  check('a locked-out rung is retried eventually', retries.changes >= 2, `${retries.changes} in an hour`);
+  check('but not constantly', retries.changes <= 20, `${retries.changes} in an hour`);
+  check(
+    'and it still spends its time on the sustainable rung',
+    q.current() <= 1.0,
+    `ratio ${q.current()}`
+  );
+
+  // And if the load really does lift, it gets all the way back.
+  run(q, 2400, fixed(REFRESH_HZ));
+  check(
+    'a locked-out rung reopens when the machine improves',
+    q.current() === Math.min(2, RENDER.maxPixelRatio),
+    `ratio ${q.current()}`
+  );
+}
+
+// ---------------------------------------------------------------------------
+{
+  // The refresh-cap estimate must not be fooled by a machine whose own limit
+  // happens to be steady. 35fps everywhere is not a display refresh rate, and
+  // treating "pinned at my best" as headroom would hand out free upgrades.
+  const q = controller();
+  const r = run(q, 900, fixed(35));
+  check(
+    'a steadily slow machine is not mistaken for a vsync-capped one',
+    q.current() === RENDER.adaptive.minPixelRatio,
+    `ratio ${q.current()} after ${r.changes} changes`
+  );
+}
+
+// ---------------------------------------------------------------------------
+{
+  // The thresholds have to be satisfiable on the displays people own.
+  check(
+    'the upgrade threshold is reachable on a 60Hz display',
+    RENDER.adaptive.upgradeFps < 60,
+    `upgradeFps is ${RENDER.adaptive.upgradeFps}`
+  );
+  check(
+    'the target is below the upgrade threshold',
+    RENDER.adaptive.targetFps < RENDER.adaptive.upgradeFps
+  );
+  check(
+    'the refresh floor is above the target, so the two cannot fight',
+    RENDER.adaptive.minRefreshFps > RENDER.adaptive.targetFps
+  );
+
+  // The floor has to stay somewhere the world is still legible. There is no
+  // antialiasing here — the image is a fragment shader over one quad, so MSAA
+  // does nothing — which makes pixel ratio the only antialiasing there is.
+  check(
+    'the desktop floor is not blocky',
+    RENDER.adaptive.minPixelRatio >= 0.7,
+    `minPixelRatio is ${RENDER.adaptive.minPixelRatio}`
+  );
+
+  // No near-duplicate rungs: two a percent apart are one rung to the eye, and
+  // the spare only wastes a downgrade cycle.
+  const q = controller({ deviceRatio: 4 });
+  const rungs = [];
+  for (let i = 0; i < q.stats().rungs; i++) rungs.push(i);
+  check('the ladder has no near-duplicate rungs', q.stats().rungs >= 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +348,15 @@ console.log('\nadaptive quality');
   // enabled is false, so this only asserts the config still says so.
   check('adaptive quality can be disabled from config',
     typeof RENDER.adaptive.enabled === 'boolean');
-  check('ceiling is the documented 1.5', RENDER.maxPixelRatio === 1.5);
+  check(
+    'the desktop ceiling allows native HiDPI rendering',
+    RENDER.maxPixelRatio >= 2,
+    `maxPixelRatio is ${RENDER.maxPixelRatio}`
+  );
+  check(
+    'the demo ceiling is lower than the desktop one',
+    RENDER.mobileMaxPixelRatio < RENDER.maxPixelRatio
+  );
 }
 
 console.log(failures === 0 ? '\nall checks passed\n' : `\n${failures} check(s) FAILED\n`);

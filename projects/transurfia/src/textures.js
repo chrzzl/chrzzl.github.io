@@ -17,6 +17,39 @@ import { TEXTURES } from './config.js';
 
 const loader = new THREE.TextureLoader();
 
+// Anisotropic filtering level, set once from the renderer's capabilities by
+// app.js. 1 means none, which is the default and was what shipped.
+//
+// This matters more here than in almost any other scene, because the entire
+// world is a floor seen at a grazing angle receding to the horizon — the exact
+// case anisotropy exists for. A mip level has to be chosen from a single
+// number, and without anisotropy that number comes from the LARGER of the two
+// screen-space derivatives. Near the horizon those differ enormously: one
+// pixel spans a few centimetres across the floor and many metres along it. So
+// the coarse mip needed for the long axis is applied to both, and detail that
+// was perfectly resolvable across the short axis is thrown away. The result is
+// distance that turns to mush and shimmers as the player walks.
+//
+// With anisotropy the hardware takes several samples along the long axis
+// instead, which is close to free on any GPU that can run this shader at all.
+let anisotropy = 1;
+
+// Called by app.js with renderer.capabilities.getMaxAnisotropy(), before any
+// set is loaded. Existing textures are updated too, so the order cannot matter.
+export function setAnisotropy(level) {
+  const next = Math.max(1, Math.floor(level) || 1);
+  if (next === anisotropy) return;
+  anisotropy = next;
+
+  for (const record of cache.values()) {
+    for (const texture of record.textures) {
+      if (!texture) continue;
+      texture.anisotropy = anisotropy;
+      texture.needsUpdate = true;
+    }
+  }
+}
+
 // name -> { textures, ready }. `ready` resolves once all three images have
 // actually decoded, which verify.js needs before it can compare pixels.
 const cache = new Map();
@@ -43,6 +76,11 @@ function configure(texture) {
   // arrangement exists to remove. See tileUV in raytracer.js.
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
+
+  // See the note on `anisotropy` above: this is the floor of a world that
+  // recedes to the horizon, so it is the whole reason distance looks the way
+  // it does.
+  texture.anisotropy = anisotropy;
 
   return texture;
 }

@@ -59,8 +59,8 @@ console.log('\ndesktop unchanged');
 
   // --- the ceiling each one gets ---
   check(
-    'desktop keeps the 1.5 ceiling',
-    RENDER.maxPixelRatio === 1.5,
+    'desktop keeps its own, higher ceiling',
+    RENDER.maxPixelRatio >= 2,
     `is ${RENDER.maxPixelRatio}`
   );
   check(
