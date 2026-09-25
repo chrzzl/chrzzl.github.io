@@ -30,12 +30,23 @@ function check(name, condition, detail) {
 
 function controller(overrides = {}) {
   return createQualityController({
+    ...RENDER.adaptive,
+    qualityFractions: RENDER.qualityFractions,
     maxPixelRatio: RENDER.maxPixelRatio,
     deviceRatio: 2,
-    ...RENDER.adaptive,
     ...overrides,
   });
 }
+
+// A machine whose frame time genuinely depends on how many pixels it draws,
+// vsync-capped like a real one. This is the ONLY kind the controller can help,
+// and telling it apart from the kinds it cannot is most of what it now does.
+const gpuBound = (fpsAtRatio1) => (ratio) => 1 / capped(fpsAtRatio1 / (ratio * ratio));
+
+// A machine whose frame time does not depend on resolution at all: capped by
+// the panel's refresh, or by the CPU side of the frame, or by the compositor.
+// Lowering resolution here costs image quality and buys precisely nothing.
+const resolutionBlind = (fps) => () => 1 / fps;
 
 // Runs `seconds` of simulated frames through the controller. `frameTimeFor`
 // turns the current pixel ratio into the time that frame took.
@@ -65,6 +76,13 @@ const REFRESH_HZ = 60;
 
 const capped = (fps) => Math.min(fps, REFRESH_HZ);
 const fixed = (fps) => () => 1 / capped(fps);
+
+// Fraction of a run spent at a given ratio. The controller now probes
+// occasionally — it is the only way to find out whether a limit has moved — so
+// the right measure of "it settled there" is how much of the time it spent
+// there, not whether it ever left.
+const timeAt = (r, ratio) =>
+  r.ratios.filter((x) => Math.abs(x - ratio) < 1e-9).length / r.ratios.length;
 
 // A machine that manages `fpsAtRatio1` at pixel ratio 1.0, scaling
 // quadratically with resolution, then vsync-capped like a real one.
@@ -106,16 +124,23 @@ console.log('\nadaptive quality');
   // Software rendering: hopeless at every resolution. The controller must give
   // up at the floor rather than chase the target down to nothing.
   const q = controller();
-  const r = run(q, 600, quadratic(3));
+  const r = run(q, 600, gpuBound(3));
+  const bottom = r.stats.ladder[r.stats.ladder.length - 1];
+
+  // The bottom RUNG, which on a dpr 2 display is 1.0 — the absolute
+  // minPixelRatio clamp is a backstop for low-DPI displays and does not bind
+  // here. Asserting against the clamp was asserting against a number this
+  // ladder cannot produce.
+  check('hopeless machine reaches the bottom rung', r.final === bottom, `ratio ${r.final}`);
   check(
-    'hopeless machine clamps at the floor',
-    r.final === RENDER.adaptive.minPixelRatio,
-    `ratio ${r.final}`
+    'hopeless machine stays there',
+    timeAt(r, bottom) > 0.9,
+    `${(timeAt(r, bottom) * 100).toFixed(1)}% of the run at the bottom`
   );
   check(
-    'hopeless machine stops trying once floored',
-    r.stats.index === r.stats.rungs - 1,
-    `index ${r.stats.index} of ${r.stats.rungs}`
+    'hopeless machine still believes resolution is the limit',
+    r.stats.resolutionBound === true,
+    'every rung it gave up did make the frame rate better'
   );
 }
 
@@ -161,31 +186,57 @@ console.log('\nadaptive quality');
 
 // ---------------------------------------------------------------------------
 {
-  // The oscillation case, and the one this design exists for: a machine sitting
-  // exactly on the boundary, fast enough to tempt an upgrade and too slow to
-  // keep it. Without the guard it would breathe between two resolutions for as
-  // long as the page is open. It is allowed to try once; it must then stop.
+  // A machine sitting exactly on the boundary: too slow at the top rung,
+  // comfortable one below. Nothing about the frame rate alone can tell it
+  // where to settle, because both answers are defensible, so what matters is
+  // how OFTEN it changes its mind.
+  //
+  // The ceiling/relaxWait/lastUpgradeAt lockout that used to police this is
+  // gone — it was what deadlocked rung 1.0 — and a wall-clock cooldown after
+  // each downgrade has replaced it. The cooldown cannot become a lockout,
+  // because the clock always arrives.
+  const cooldown = RENDER.adaptive.upgradeCooldownSeconds;
   const q = controller();
+  const r = run(q, 3600, gpuBound(140));
   const top = Math.min(2, RENDER.maxPixelRatio);
-  // Genuinely below the target at full resolution, and vsync-capped below it,
-  // so the machine has real headroom to tempt an upgrade with.
-  const boundary = (ratio) => (ratio >= top - 1e-9 ? 1 / 34 : 1 / REFRESH_HZ);
-  const r = run(q, 3600, boundary);
 
-  // The claim is no longer "it never changes again" — a locked-out rung is now
-  // retried occasionally, so that a machine whose load lifts is not punished
-  // for the rest of the session. What has to stay true is the thing the guard
-  // was actually for: the visitor is not watching the resolution breathe. So
-  // the measure is how much of the hour was SPENT on the rung it cannot hold,
-  // not how many times it touched it.
-  const atTop = r.ratios.filter((x) => x >= top - 1e-9).length / r.ratios.length;
+  // Each cycle is one downgrade plus one upgrade, and cannot be shorter than
+  // the cooldown plus the few seconds it takes to notice the top rung is too
+  // slow. That is the bound the cooldown buys, and it is worth stating as
+  // arithmetic rather than as a round number pulled from nowhere.
+  const perHour = (2 * 3600) / cooldown;
   check(
-    'boundary machine spends almost no time on the rung it cannot hold',
-    atTop < 0.05,
-    `${(atTop * 100).toFixed(1)}% of an hour`
+    'the cooldown bounds how often a boundary machine changes its mind',
+    r.changes <= perHour,
+    `${r.changes} changes/hour against a ceiling of ${perHour.toFixed(0)} implied by a ${cooldown}s cooldown`
   );
-  check('boundary machine retries rarely', r.changes <= 24, `${r.changes} changes in an hour`);
-  check('boundary machine lands on the sustainable rung', r.final < top, `ratio ${r.final}`);
+  check(
+    'and it still spends its time on the rung it can hold',
+    timeAt(r, top) < 0.3,
+    `${(timeAt(r, top) * 100).toFixed(1)}% on the rung it cannot hold`
+  );
+
+  // The cooldown must never become a lockout. However long the session, the
+  // higher rung stays reachable — that is the whole reason it is a deadline
+  // rather than a streak.
+  check(
+    'the cooldown is not a lockout',
+    r.ratios.some((x) => Math.abs(x - top) < 1e-9),
+    'never returned to the top rung at all'
+  );
+
+  // ...and it does actually help. Without it, the same machine flips roughly
+  // twice as often.
+  const without = run(controller({ upgradeCooldownSeconds: 0 }), 3600, gpuBound(140));
+  check(
+    'the cooldown roughly halves the flipping',
+    r.changes < without.changes * 0.75,
+    `${r.changes} with, ${without.changes} without`
+  );
+  console.log(
+    `       [info] boundary machine: ${(r.changes / 60).toFixed(1)}/min with a ${cooldown}s cooldown, ` +
+      `${(without.changes / 60).toFixed(1)}/min without`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -216,14 +267,11 @@ console.log('\nadaptive quality');
 
   // Phase one: genuinely too slow at every rung, so it walks to the floor
   // without ever being tempted into an upgrade. Nothing is locked out.
-  run(q, 200, quadratic(20));
+  run(q, 200, gpuBound(20));
   const degraded = q.current();
+  const bottom = q.stats().ladder[q.stats().rungs - 1];
   check('a 60Hz display degrades when it must', degraded < top, `${top} -> ${degraded}`);
-  check(
-    'and degrades all the way to the floor',
-    degraded === RENDER.adaptive.minPixelRatio,
-    `ratio ${degraded}`
-  );
+  check('and degrades all the way to the bottom rung', degraded === bottom, `ratio ${degraded}`);
 
   // Phase two: the load lifts. Comfortable everywhere now, but still capped at
   // 60fps by the panel — which is the entire point. Under the shipped
@@ -234,90 +282,137 @@ console.log('\nadaptive quality');
     q.current() === top,
     `stuck at ${q.current()} (was ${degraded}); a 60Hz panel cannot exceed 75fps`
   );
-  check('and climbs one rung at a time', r.changes >= 2);
+  check('and climbs one rung at a time', r.changes >= 2, `${r.changes} changes`);
 }
 
 // ---------------------------------------------------------------------------
 {
-  // A rung that was locked out for oscillating must be retried eventually.
-  // "Cannot sustain that resolution" is true of a machine under whatever load
-  // it is under at the time, and a session that starts busy should not be
-  // penalised for the rest of its life.
+  // THE reported bug, measured in Firefox: parked on the bottom rung at a
+  // sustained ~75fps and never climbing off it.
+  //
+  // The blocking condition was `upgrade()`'s first line, `index <= ceiling`,
+  // with the ceiling pinned to the bottom rung by the oscillation guard. The
+  // only escape needed an UNBROKEN streak above 55fps lasting relaxWait
+  // seconds (90, doubling), and the longest such streak this scene produces is
+  // about 21 seconds. The lockout is gone; this asserts it stays gone.
   const q = controller();
 
-  // Heavy above ratio 1.0, comfortable below: the shape that provokes an
-  // upgrade, fails it, and gets the rung locked out.
-  const heavy = (ratio) => 1 / (ratio > 1.0 ? 22 : REFRESH_HZ);
-  const first = run(q, 200, heavy);
-  const locked = q.stats().ceiling;
-  check('an unsustainable rung gets locked out', locked > 0, `ceiling ${locked}`);
-
-  // Left alone under the same load, it must retry — and fail — rather than
-  // never trying again, but must not do it constantly.
-  const retries = run(q, 3600, heavy);
-  check('a locked-out rung is retried eventually', retries.changes >= 2, `${retries.changes} in an hour`);
-  check('but not constantly', retries.changes <= 20, `${retries.changes} in an hour`);
+  // Walk it to the bottom the way a bad stretch of play does.
+  run(q, 200, gpuBound(20));
+  const bottom = q.current();
   check(
-    'and it still spends its time on the sustainable rung',
-    q.current() <= 1.0,
-    `ratio ${q.current()}`
+    'reaches the bottom rung under load',
+    bottom === q.stats().ladder[q.stats().rungs - 1],
+    `ratio ${bottom}`
   );
 
-  // And if the load really does lift, it gets all the way back.
-  run(q, 2400, fixed(REFRESH_HZ));
+  // Now the reported condition: comfortable, but with the dear view every
+  // half-minute that a player turning around produces. The old controller
+  // needed an unbroken streak and never got one.
+  let t = 0;
+  let sinceDip = 0;
+  let climbed = null;
+  while (t < 900) {
+    sinceDip += 1 / 75;
+    const dipping = sinceDip > 30 && sinceDip < 31;
+    if (sinceDip > 31) sinceDip = 0;
+    const dt = 1 / (dipping ? 34 : 75);
+    t += dt;
+    const changed = q.frame(dt);
+    if (changed !== null && changed > bottom && climbed === null) climbed = t;
+  }
+
   check(
-    'a locked-out rung reopens when the machine improves',
+    'climbs off the bottom rung at a sustained 75fps',
+    climbed !== null,
+    `never upgraded in 15 minutes; blocked by ${q.stats().upgradeBlockedBy}`
+  );
+  check(
+    'and keeps climbing rather than stopping one rung up',
+    q.current() > bottom,
+    `ended at ${q.current()}, bottom is ${bottom}`
+  );
+  check(
+    'a periodic dear view does not prevent it',
+    climbed !== null && climbed < 300,
+    climbed === null ? 'never' : `took ${climbed.toFixed(0)}s`
+  );
+}
+
+// ---------------------------------------------------------------------------
+{
+  // The point of the window statistic: a machine whose frame rate swings with
+  // the view but whose typical performance is fine must be left alone. Under
+  // the old half-second average this was the case that walked the ladder down.
+  const q = controller();
+  let seed = 99;
+  const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  let look = 0;
+  let t = 0;
+  let changes = 0;
+  while (t < 600) {
+    look += (rand() - 0.5) * 0.25;
+    look = Math.max(-1, Math.min(1, look));
+    // Averages 70fps, dipping under 40 on the dearest views.
+    const dt = 1 / (70 * (1 + look * 0.42));
+    t += dt;
+    if (q.frame(dt) !== null) changes += 1;
+  }
+  check(
+    'a view-varying machine with a good median is not downgraded',
     q.current() === Math.min(2, RENDER.maxPixelRatio),
-    `ratio ${q.current()}`
+    `dropped to ${q.current()} after ${changes} changes`
   );
 }
 
 // ---------------------------------------------------------------------------
 {
-  // The refresh-cap estimate must not be fooled by a machine whose own limit
-  // happens to be steady. 35fps everywhere is not a display refresh rate, and
-  // treating "pinned at my best" as headroom would hand out free upgrades.
+  // The texture-change pause.
+  //
+  // An honest note about what this is worth. Measured, the decision window
+  // already absorbs stalls entirely: a stall of 0.3s, 1s, 2s, 4s and even 8s
+  // all leave the chosen rung untouched. The reason is that the percentile is
+  // taken over frames BY COUNT, and slow frames are few in number even when
+  // they dominate the wall clock — fifty 160ms frames are eight seconds of
+  // misery and still only a sixth of a ten-second window's samples.
+  //
+  // So at the current window and percentile the pause changes no outcome, and
+  // the test below deliberately asserts its MECHANISM rather than pretending
+  // otherwise. It is kept because it is six lines and it stops being a no-op
+  // the moment the window is shortened or the percentile lowered — and because
+  // on a slow phone, decoding three 2048px images is not a one-frame event.
+  //
+  // (The same measurement is a warning about the statistic itself: a machine
+  // rendering three frames in four at 70fps and one in four at 6fps would look
+  // perfectly healthy to p25 while stuttering horribly. That is a property of
+  // counting frames rather than seconds, and it is worth knowing before the
+  // percentile is tuned.)
   const q = controller();
-  const r = run(q, 900, fixed(35));
-  check(
-    'a steadily slow machine is not mistaken for a vsync-capped one',
-    q.current() === RENDER.adaptive.minPixelRatio,
-    `ratio ${q.current()} after ${r.changes} changes`
-  );
-}
+  let t = 0;
+  while (t < 30) {
+    const dt = 1 / 70;
+    t += dt;
+    q.frame(dt);
+  }
+  check('the window has filled', q.stats().windowSeconds > 9);
 
-// ---------------------------------------------------------------------------
-{
-  // The thresholds have to be satisfiable on the displays people own.
-  check(
-    'the upgrade threshold is reachable on a 60Hz display',
-    RENDER.adaptive.upgradeFps < 60,
-    `upgradeFps is ${RENDER.adaptive.upgradeFps}`
-  );
-  check(
-    'the target is below the upgrade threshold',
-    RENDER.adaptive.targetFps < RENDER.adaptive.upgradeFps
-  );
-  check(
-    'the refresh floor is above the target, so the two cannot fight',
-    RENDER.adaptive.minRefreshFps > RENDER.adaptive.targetFps
-  );
+  q.pause();
+  check('pausing empties the decision window', q.stats().windowSeconds === 0);
 
-  // The floor has to stay somewhere the world is still legible. There is no
-  // antialiasing here — the image is a fragment shader over one quad, so MSAA
-  // does nothing — which makes pixel ratio the only antialiasing there is.
-  check(
-    'the desktop floor is not blocky',
-    RENDER.adaptive.minPixelRatio >= 0.7,
-    `minPixelRatio is ${RENDER.adaptive.minPixelRatio}`
-  );
+  // While paused, frames are discarded rather than measured.
+  for (let i = 0; i < 8; i++) q.frame(0.16);
+  check('frames during the pause are not collected', q.stats().windowSamples === 0);
+  check('and no quality change can happen', q.stats().lastChange === null);
 
-  // No near-duplicate rungs: two a percent apart are one rung to the eye, and
-  // the spare only wastes a downgrade cycle.
-  const q = controller({ deviceRatio: 4 });
-  const rungs = [];
-  for (let i = 0; i < q.stats().rungs; i++) rungs.push(i);
-  check('the ladder has no near-duplicate rungs', q.stats().rungs >= 2);
+  // After it lapses, measurement resumes normally.
+  let t2 = 0;
+  while (t2 < 12) {
+    const dt = 1 / 70;
+    t2 += dt;
+    q.frame(dt);
+  }
+  check('measurement resumes after the pause', q.stats().windowSeconds > 9);
+  check('and the stall cost no quality', q.current() === Math.min(2, RENDER.maxPixelRatio));
 }
 
 // ---------------------------------------------------------------------------

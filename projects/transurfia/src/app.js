@@ -113,19 +113,48 @@ export function createApp() {
   // itself to the ceiling, which is what it always used to do.
   // Both ends of the ladder differ between the two experiences. The demo is
   // watched on a small screen, so it starts lower and is allowed to sink
-  // further; the interactive version is looked at closely on a monitor, where
-  // the floor has to stay somewhere the surface is still legible.
+  // further; the interactive version is looked at closely on a monitor.
   const pixelCeiling = demoMode ? RENDER.mobileMaxPixelRatio : RENDER.maxPixelRatio;
   const pixelFloor = demoMode ? RENDER.mobileMinPixelRatio : RENDER.adaptive.minPixelRatio;
 
-  const quality = RENDER.adaptive.enabled
+  // --- render-quality overrides from the URL ---------------------------
+  //
+  // `?adaptive=off` pins the renderer at the ceiling and builds no controller;
+  // `?pixelratio=N` pins it at N. Both exist for one job: telling the
+  // difference between an artefact the adaptive controller is CAUSING and one
+  // it is merely failing to hide. Without a way to switch it off from the
+  // address bar, that A/B needs a code edit and a redeploy, which is enough
+  // friction that the question tends to go unanswered.
+  //
+  // `?debug` puts the live numbers in the HUD and logs every transition.
+  const params = new URLSearchParams(window.location.search);
+  const debugQuality = params.has('debug');
+  const forcedRatio = Number(params.get('pixelratio')) || 0;
+  const adaptiveOff = params.get('adaptive') === 'off' || forcedRatio > 0;
+
+  const quality = RENDER.adaptive.enabled && !adaptiveOff
     ? createQualityController({
         ...RENDER.adaptive,
+        qualityFractions: RENDER.qualityFractions,
         maxPixelRatio: pixelCeiling,
         minPixelRatio: pixelFloor,
         deviceRatio: window.devicePixelRatio || 1,
       })
     : null;
+
+  // What to render at when there is no controller: the forced ratio, or the
+  // ceiling, which is what the renderer did before any of this existed.
+  function fixedRatio() {
+    const dpr = window.devicePixelRatio || 1;
+    return forcedRatio > 0 ? forcedRatio : Math.min(dpr, pixelCeiling);
+  }
+
+  if (!quality) {
+    console.info(
+      '[transurfia] adaptive quality OFF, pinned at ' + fixedRatio().toFixed(3) +
+        ' (devicePixelRatio ' + (window.devicePixelRatio || 1) + ')'
+    );
+  }
 
   // The single place the drawing buffer's size is decided, called both on
   // resize and whenever the quality controller changes its mind. Keeping it to
@@ -154,7 +183,7 @@ export function createApp() {
     const dpr = window.devicePixelRatio || 1;
     if (quality) quality.setDeviceRatio(dpr);
 
-    const ratio = quality ? quality.current() : Math.min(dpr, RENDER.maxPixelRatio);
+    const ratio = quality ? quality.current() : fixedRatio();
 
     renderer.setPixelRatio(ratio);
     renderer.setSize(w, h);
@@ -263,6 +292,12 @@ export function createApp() {
   }
 
   function applyTextureSet(name) {
+    // Three 2048px images to upload and mipmap. That stalls a frame or two,
+    // and to the quality controller a stall is indistinguishable from a
+    // machine that has become too slow — so it would answer a texture switch
+    // by spending a rung of image quality on it. Tell it to look away.
+    if (quality) quality.pause();
+
     // The shader can take the textures immediately — three.js binds a
     // placeholder until the pixels arrive. The minimap draws them into a 2D
     // canvas, so it has to wait for the images to actually decode.
@@ -356,7 +391,22 @@ export function createApp() {
 
       // Measured after the frame it describes has been drawn. A non-null answer
       // means the pixel ratio changed and the drawing buffer has to follow.
-      if (quality && quality.frame(rawDt) !== null) applySize();
+      if (quality && quality.frame(rawDt) !== null) {
+        applySize();
+
+        // Logged every time, not only under ?debug. A resolution change is the
+        // one thing this renderer does that a visitor can SEE and not explain,
+        // and "after a while it goes pixelated" was reported twice before there
+        // was any way to tell whether the controller was responsible.
+        const s = quality.stats();
+        const c = s.lastChange;
+        console.info(
+          '[transurfia] pixel ratio ' + c.from.toFixed(3) + ' -> ' + c.to.toFixed(3) +
+            '  (' + c.reason + ')  fps=' + s.fps.toFixed(1) +
+            ' best=' + s.bestFps.toFixed(1) +
+            ' resolutionBound=' + s.resolutionBound
+        );
+      }
     }
     frame();
   }
@@ -369,8 +419,12 @@ export function createApp() {
     player,
     minimap,
     toggles,
-    // Null when RENDER.adaptive.enabled is false. Read by debug HUDs.
+    // Null when adaptive quality is disabled, by config or by ?adaptive=off.
     quality,
+    // True when ?debug is in the URL: main.js then puts the live frame rate,
+    // pixel ratio and controller state in the HUD.
+    debugQuality,
+    fixedRatio,
     // Null on desktop. main.js reads its label to narrate the tour.
     autoPlayer,
     demoMode,

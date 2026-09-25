@@ -497,12 +497,26 @@ export const RENDER = {
   // few seconds behind.
   mobileMaxPixelRatio: 1.0,
 
-  // The floor on touch devices, which is lower than the desktop one.
+  // The quality ladder, as fractions of the top rung — which is itself
+  // min(devicePixelRatio, the ceiling above). Quality order, best first.
   //
-  // The demo is watched rather than played, on a small screen, at arm's length
-  // — softness costs less there than it does on a monitor — and a weak phone
-  // needs somewhere to go. On a desktop the same value produced the artefact
-  // this pair of settings exists to prevent.
+  // Fractions rather than absolute pixel ratios, and simple ones, because the
+  // browser has to scale the canvas to the display and a simple ratio scales
+  // cleanly. The ladder these replace was geometric (each rung 0.8 of the one
+  // above) and produced 1.024, 0.8192 and the like: fractions of nothing,
+  // each requiring an awkward resample that added blur and shimmer on top of
+  // the resolution already surrendered to get there.
+  //
+  // Being relative to the device also fixes both ends of the DPI range at
+  // once. On a dpr 2 display the ladder never drops below 1.0 CSS pixels; on a
+  // dpr 1 display it still has four rungs to work with. No absolute floor can
+  // do both — 1.0 leaves dpr 1 with a single rung and no adaptation at all,
+  // 0.75 gives dpr 2 rungs far below anything worth looking at.
+  qualityFractions: [1, 3 / 4, 2 / 3, 1 / 2],
+
+  // Hard floor on touch devices. With the fractional ladder this is a clamp
+  // rather than the thing that defines the rungs: on a phone the top rung is
+  // already mobileMaxPixelRatio, well under the device's own ratio.
   mobileMinPixelRatio: 0.5,
 
   // Adaptive quality. See quality.js, which owns the logic; these are all of
@@ -522,38 +536,28 @@ export const RENDER = {
     // Turn the whole thing off and pin rendering at maxPixelRatio.
     enabled: true,
 
-    // The floor.
+    // Hard floor, as an absolute pixel ratio.
     //
-    // Raised from 0.5, which was too low and was reached in practice: on a 4K
-    // display the ray tracer cannot hold the old 50fps target at full
-    // resolution, so the controller walked down every rung of the ladder over
-    // about fifteen seconds and sat at the bottom. 0.5 renders 11% of a
-    // 150%-scaled 4K display's pixels, one rendered pixel covering 2x2 CSS
-    // pixels, and it looks like it. The original note here said that below
-    // roughly half ratio the surface becomes hard to read, and then set the
-    // floor at exactly that point.
+    // With the fractional ladder above this is a clamp rather than the thing
+    // that defines the rungs, and it binds only on low-DPI displays: at dpr 1
+    // the rungs are 1.0, 0.75, 0.667, 0.5 and this stops the last one going
+    // further, while at dpr 2 they are 2.0, 1.5, 1.333, 1.0 and it never binds
+    // at all.
     //
     // It matters more here than in most renderers because there is no
     // antialiasing to soften the loss and no way to add any cheaply. The image
     // is computed by a fragment shader over a fullscreen quad, so MSAA does
-    // nothing at all — it antialiases geometry edges, and there is one piece of
-    // geometry, the quad. Supersampling is the only antialiasing available, and
-    // supersampling is what the pixel ratio IS. Lowering it is therefore not a
-    // quality setting with a fallback; it is the fallback.
-    //
-    // 0.75 costs roughly a third fewer pixels than 1.0 while staying visibly
-    // soft rather than blocky, and the ladder below it has been removed.
-    minPixelRatio: 0.75,
+    // nothing — it antialiases geometry edges, and there is one piece of
+    // geometry. Supersampling is the only antialiasing available, and
+    // supersampling is what the pixel ratio IS. Lowering it is not a quality
+    // setting with a fallback; it is the fallback.
+    minPixelRatio: 0.5,
 
     // Where to start, before anything has been measured. Null means "at the
     // ceiling": a capable machine is never made to look soft while the
     // controller works out that it is capable.
     startPixelRatio: null,
 
-    // Ratio between neighbouring rungs of the quality ladder. 0.8 is a ~36%
-    // cut in pixels per step — big enough to actually rescue a struggling
-    // frame rate, small enough not to be jarring when it happens.
-    step: 0.8,
 
     // Drop quality when the smoothed frame rate sits below `targetFps`, raise
     // it when it sits above `upgradeFps`. The gap between them is a dead band
@@ -578,6 +582,34 @@ export const RENDER = {
     // measurable frame rate well below any ambitious absolute threshold. See
     // the long note at the upgrade test in quality.js.
     vsyncMargin: 0.97,
+
+    // Time constant for the refresh-rate estimate decaying toward a sustained
+    // lower frame rate. It rises instantly to any new high; this governs only
+    // how fast it comes down.
+    //
+    // It used to never come down at all, which is how a laptop that started at
+    // 144Hz and dropped to 30Hz on battery saver ended up unable to recover:
+    // the stale 144 made the vsync test below permanently false.
+    bestFpsDecaySeconds: 20,
+
+    // --- is resolution even the problem? -------------------------------------
+    //
+    // A downgrade is run as an experiment: see `resolutionBound` in quality.js.
+    // These govern the experiment.
+
+    // How long after a downgrade to judge whether it helped. Long enough for
+    // the change to have settled and the frame-time average to have caught up.
+    probeSeconds: 2.5,
+
+    // How much better the frame rate has to be for the downgrade to count as
+    // having worked. Below this the resolution was surrendered for nothing and
+    // is handed back.
+    probeGain: 1.12,
+
+    // Having concluded that resolution is not the limit, how long before
+    // allowing it to be blamed again. A machine that was refresh-limited a
+    // minute ago may be genuinely GPU-bound now.
+    reprobeSeconds: 45,
 
     // The lowest frame rate that could plausibly BE a display refresh rate.
     // Real panels run at 50Hz and upward; anything below this is the GPU's own
@@ -619,21 +651,58 @@ export const RENDER = {
     // slow frames, short enough to notice a real change within a second.
     smoothingSeconds: 0.5,
 
-    // If an upgrade has to be undone within this long, the rung it went to is
-    // marked unreachable. Without it a machine sitting exactly on the boundary
-    // would breathe between two resolutions indefinitely, which is far more
-    // distracting than simply running at the lower one.
-    oscillationGuardSeconds: 20,
+    // --- the decision window -------------------------------------------------
+    //
+    // Decisions are made from a percentile over this window, not from the
+    // short average. Cost in this renderer depends on where the camera looks —
+    // a ray down a corridor of repeats crosses a dozen portals, one at the
+    // floor nearby crosses none — so the frame rate swings by tens of percent
+    // with no change in the machine's capability at all.
+    //
+    // Measured, on the machine that prompted this: at a rung averaging 58fps
+    // the half-second average still spent 10% of its time under the 40fps
+    // target, which was enough to keep stepping down past resolutions that
+    // were perfectly comfortable. And at a rung averaging 75fps, the longest
+    // unbroken streak above 55fps in ten minutes was 21 seconds — so anything
+    // requiring a sustained streak to recover never recovered.
+    decisionWindowSeconds: 10,
 
-    // ...but not unreachable for ever. "This machine cannot hold that rung" is
-    // true of the machine as it is at that moment, and the cause is usually
-    // temporary — another application, a video call, battery saver. After this
-    // long at a comfortable frame rate with nowhere to go, the lockout is
-    // lifted and the rung is tried once more. Each failed attempt doubles the
-    // wait, up to the maximum, so a machine that genuinely cannot manage it
-    // ends up asking roughly twice an hour rather than every other minute.
-    ceilingRelaxSeconds: 90,
-    ceilingRelaxMaxSeconds: 1800,
+    // Nothing is decided from less than this much data. The downgrade path may
+    // act on a partial window, because a machine in trouble should not wait
+    // ten seconds for relief; an upgrade waits for a full one, because it
+    // spends performance rather than saving it.
+    minDecisionSeconds: 3,
+
+    // Which percentile decides. 0.25 means "the frame rate that three quarters
+    // of frames beat" — poor enough to notice a rung that is genuinely too
+    // expensive, robust enough to ignore the dearest view in the window.
+    decisionPercentile: 0.25,
+
+    // Cap on the wait between tests of whether the bottom rung is still needed.
+    floorProbeMaxSeconds: 600,
+
+    // How long after a downgrade before an upgrade may be considered.
+    //
+    // The whole of the anti-oscillation machinery, and deliberately the
+    // dumbest possible form of it. What it replaces was a lockout that could
+    // only be cleared by an unbroken streak above the upgrade threshold; in a
+    // world whose frame cost swings with the view that streak never happened,
+    // so the lockout never cleared and the bottom rung became a trap. A
+    // deadline cannot fail that way — the clock always arrives.
+    //
+    // 25s is long enough that a machine sitting on the boundary between two
+    // rungs changes resolution about twice a minute rather than eight times,
+    // and short enough that a machine which genuinely improves is not left
+    // waiting.
+    upgradeCooldownSeconds: 25,
+
+    // How long to stop judging after a texture change.
+    //
+    // Pressing T uploads three new 2048px images and regenerates their
+    // mipmaps, which stalls a frame or two. To the controller that is
+    // indistinguishable from a machine that has suddenly become too slow, and
+    // it would spend a rung of image quality on a stall that was already over.
+    textureChangePauseSeconds: 2,
   },
 
   // Draw a thin darker seam along tile boundaries. It is the clearest cue for

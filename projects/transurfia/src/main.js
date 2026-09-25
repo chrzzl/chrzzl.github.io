@@ -39,6 +39,28 @@ const label = (name) =>
 app.start(() => {
   const onOff = (v) => (v ? 'on' : 'off');
 
+  // ?debug — the live state of the adaptive controller.
+  //
+  // This exists so that "after a while it goes pixelated" can be answered with
+  // a reading instead of an impression. The pixel ratio is the number that
+  // matters; `bound` says whether the controller believes resolution is what
+  // is limiting the frame rate, which is the difference between a downgrade
+  // that is buying something and one that is pure loss.
+  if (app.debugQuality) {
+    if (!app.quality) {
+      return `<span class="hint">adaptive off — pinned at ${app.fixedRatio().toFixed(3)}</span>`;
+    }
+    const s = app.quality.stats();
+    const c = s.lastChange;
+    return (
+      `<span class="set">${s.pixelRatio.toFixed(3)}x</span>\n` +
+      `<span class="hint">${s.fps.toFixed(1)} fps  (${s.frameTimeMs.toFixed(1)} ms)</span>\n` +
+      `<span class="hint">rung ${s.index + 1}/${s.rungs}   best ${s.bestFps.toFixed(0)} fps</span>\n` +
+      `<span class="hint">bound ${s.resolutionBound}${s.probing ? '  probing' : ''}</span>\n` +
+      `<span class="hint">${c ? `${c.from.toFixed(3)} -> ${c.to.toFixed(3)}: ${c.reason}` : 'no change yet'}</span>`
+    );
+  }
+
   // On a phone the HUD has no keys to advertise, so it narrates instead: the
   // current leg's label from DEMO.route. That one line is what makes this a
   // guided showcase rather than a screensaver — the visitor is told what the
