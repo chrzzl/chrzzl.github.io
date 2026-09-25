@@ -363,6 +363,11 @@ export function orbitYaw(angle) {
 // enterRadius - orbitRadius of movement, and never around the column. Walk up
 // to it from the south and you stay south of it.
 export function enterSingularity(surface, directions, x, z) {
+  // Switched off in config: the player is never taken off their feet, and
+  // walking stays walking. The column is still solid — pushOffSingularity
+  // below still runs every frame — so the only thing lost is the orbit.
+  if (!SINGULARITIES.capture) return null;
+
   const near = nearestSingularity(surface.singularPositions, x, z);
   if (!near || near.distance > SINGULARITIES.enterRadius) return null;
   return placeOnOrbit(surface, directions, near.index, x, z);

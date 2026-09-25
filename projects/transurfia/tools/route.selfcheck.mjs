@@ -10,8 +10,13 @@
 // ever, on a visitor's phone, with no way to notice from here.
 //
 // So the route is not inspected, it is WALKED: a real PlayerController, the
-// real surface, the real resolveStep, the real edge gluings and the real
-// cone-point capture, driven by the real AutoPlayer. The only fakes are a
+// real surface, the real resolveStep and the real edge gluings, driven by the
+// real AutoPlayer.
+//
+// Cone-point capture is currently switched off (SINGULARITIES.capture), which
+// makes the "never captured" checks below trivially true — they are kept
+// because that flag is one boolean away from returning, and the route's safety
+// is only obvious while it holds. The only fakes are a
 // `document` that swallows event listeners and a `domElement` that is never
 // used, because PlayerController registers keyboard and mouse handlers that
 // nothing here will ever fire.
@@ -228,38 +233,51 @@ console.log('\ndemo route');
 
 // ---------------------------------------------------------------------------
 {
-  // The stray-recovery path, which should be dead code. Forced by starting the
-  // player on top of a corner: the demo must notice, use W to get out, and
-  // restart rather than orbit.
+  // Capture is switched off (SINGULARITIES.capture), so walking is just
+  // walking. The strongest form of the route's safety claim follows for free —
+  // there is no longer any state the demo could get stuck in — but the column
+  // must still be SOLID, or the player would walk through the one piece of
+  // geometry in the world.
+  check('cone-point capture is disabled', SINGULARITIES.capture === false);
+
   const camera = new THREE.PerspectiveCamera(PLAYER.fieldOfView, 1, 0.05, 1000);
   const player = new PlayerController(camera, {}, surface, { obstacles: [] });
-  const auto = createAutoPlayer(player, { start: START });
 
+  // Standing exactly on a corner: the worst case there is.
   const [cx, cz] = surface.singularPositions[2];
   player.position.set(cx, cz);
-  player.update(1 / 60); // captured
+  player.update(1 / 60);
 
-  check('a stray start really is captured', player.mode === 'singularity');
+  check('standing on a cone point does not take the controls away', player.mode === 'moving');
 
-  const warn = console.warn;
-  let warned = false;
-  console.warn = () => {
-    warned = true;
-  };
-  for (let i = 0; i < 400; i++) {
-    auto.update(1 / 60);
-    player.update(1 / 60);
-  }
-  console.warn = warn;
-
-  check('the demo recovers from a stray capture', player.mode === 'moving');
-  check('and says so in the console', warned);
+  const pushed = distanceToNearestCorner(player.position.x, player.position.y);
   check(
-    'and is back on the route',
-    distanceToNearestCorner(player.position.x, player.position.y) >
-      SINGULARITIES.enterRadius * 2,
-    `at ${player.position.x.toFixed(2)}, ${player.position.y.toFixed(2)}`
+    'but the column is still solid',
+    pushed > SINGULARITIES.radius,
+    `ended ${pushed.toFixed(3)} from the corner, column radius ${SINGULARITIES.radius}`
   );
+
+  // Walking straight at a corner must not end inside it either.
+  const auto = createAutoPlayer(player, { start: START });
+  player.position.set(cx + 1, cz + 1);
+  player.yaw = Math.atan2(1, 1) + Math.PI; // pointed back at the corner
+  let closest = Infinity;
+  for (let i = 0; i < 600; i++) {
+    player.keys.add('KeyW');
+    player.update(1 / 60);
+    closest = Math.min(closest, distanceToNearestCorner(player.position.x, player.position.y));
+  }
+  player.keys.clear();
+
+  check('walking into a column never ends inside it', closest > SINGULARITIES.radius,
+    `came within ${closest.toFixed(3)}`);
+  check('and still never captures', player.mode === 'moving');
+
+  // The autoplayer's recovery path is now unreachable. It is kept because
+  // capture is one boolean away from returning, and a demo that could be
+  // hijacked into orbiting a column for ever is exactly the failure it exists
+  // to prevent.
+  check('the demo keeps its recovery path anyway', typeof auto.restart === 'function');
 }
 
 console.log(failures === 0 ? '\nall checks passed\n' : `\n${failures} check(s) FAILED\n`);

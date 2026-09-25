@@ -13,10 +13,15 @@ surface analytically, applying each crossed edge's translation and carrying on
 in the same direction.
 
 All eight corners of the L are **the same point** of the surface — a cone point
-of total angle 6π. Walk into one of the grey columns and you are put on a circle
-around it, facing outward, with the mouse sweeping you around. Going round once
-takes three full turns of the mouse, not one, because there is three times as
-much angle there as a point is supposed to have.
+of total angle 6π: three times as much angle as a point is supposed to have. The
+grey columns mark it.
+
+An orbit mode used to take hold of the player there and sweep them around the
+cone point, so that one lap cost three full turns of the mouse. It is switched
+off — `SINGULARITIES.capture` in `config.js` — because it takes the controls
+away mid-stride, which is a poor trade for a walking simulator. The columns are
+still solid; walking is just walking. The code behind it is intact and the flag
+is the whole of turning it back on.
 
 | Key | Action |
 | --- | --- |
@@ -26,7 +31,6 @@ much angle there as a point is supposed to have.
 | `G` | tile grid |
 | `C` | singularity columns |
 | `T` | tile style |
-| `W` (at a singularity) | stop orbiting and walk away |
 | `Esc` | release the mouse |
 
 ## On a phone

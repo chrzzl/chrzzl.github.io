@@ -111,6 +111,20 @@ export const SINGULARITIES = {
   // the cone point is a fact about the surface, so an invisible column catches
   // the player exactly like a visible one.
 
+  // Whether walking up to a cone point captures the player at all.
+  //
+  // Currently FALSE: walking is just walking. The columns are still there and
+  // still solid — you cannot walk through one — but they no longer take the
+  // controls away and put you in orbit.
+  //
+  // The orbit is the most mathematically interesting thing in this world (see
+  // the note above: three full sweeps of the mouse to get back where you
+  // started, because there is 6*PI of angle at that point), and it is also the
+  // one moment where the game stops doing what the player asked. Turning it
+  // off is a choice about the second, not a denial of the first — every
+  // function behind it is intact and this is the whole of switching it on.
+  capture: false,
+
   // How close the player has to come to be caught, in world units.
   //
   // 0.36 is where the columns used to stop the player (their radius plus
