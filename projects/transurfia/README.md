@@ -35,19 +35,23 @@ is the whole of turning it back on.
 
 ## On a phone
 
-It does not run on one, and says so. Transurfia is walked with WASD and looked
-around with the pointer locked to the window, so a device with neither a
-keyboard nor a mouse is turned away with an explanation rather than handed a
-welcome screen that does nothing when tapped.
+It starts, and then you find out it needs a keyboard, because that is a smaller
+failure than being told you cannot play on a machine that would have worked.
+
+Three separate attempts to detect "this device has no keyboard" each turned away
+hardware that could run it perfectly well — every Android phone, a Surface Pro
+with its Type Cover attached, and then the same Surface again by the fix. The
+pointer media queries describe input hardware hedged by whatever might be
+clipped on later, and they do not answer the question. So the question is no
+longer asked: nothing is refused for being the wrong shape of device. Only two
+things can turn anyone away, and both are facts about the browser rather than
+guesses about the machine — no ES modules or import maps, and no WebGL2.
 
 A guided demo for touch devices exists in the code — `src/autoplayer.js` drives
 the real player along `DEMO.route` by pressing its movement keys, so it is the
-real surface and not a recording — but it is **switched off**: it was not good
-enough to show. `DEMO.enabled` in `config.js` is the whole of turning it back
-on, and `tools/route.selfcheck.mjs` still keeps the route honest meanwhile.
-
-A phone with a Bluetooth keyboard and mouse genuinely can play; `?mode=interactive`
-lets one through.
+real surface and not a recording — but `DEMO.enabled` is **false**: it was not
+good enough to show. That flag is the whole of turning it back on, and
+`tools/route.selfcheck.mjs` keeps the route honest meanwhile.
 
 ## Requirements
 

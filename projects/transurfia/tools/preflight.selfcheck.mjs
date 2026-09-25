@@ -237,6 +237,7 @@ console.log('\npreflight');
 // --- the decision table -----------------------------------------------------
 
 const { evaluate } = load(fakeBrowser(DESKTOP))._internals;
+const PREFLIGHT_SOURCE = readFileSync(new URL('../src/preflight.js', import.meta.url), 'utf8');
 
 const ok = {
   modules: true,
@@ -279,10 +280,33 @@ const verdict = (overrides) => {
     verdict({ touchOnly: true, pointerLock: false })
   );
 
-  // Neither pointer lock nor touch: nothing here can be driven or watched.
+  // NOTHING is rejected for being the wrong shape of device any more.
+  //
+  // Three separate devices that could play perfectly well were turned away by
+  // an input check — every Android phone, then a Surface Pro with its keyboard
+  // attached, then the same Surface again by the fix. The pointer media
+  // queries describe hardware hedged by whatever might be clipped on later and
+  // do not reliably answer "is there a keyboard here", so the question is no
+  // longer asked. Someone without a keyboard finds out by pressing W.
   check(
-    'a browser with no usable input is rejected',
-    verdict({ pointerLock: false, touchOnly: false }) === 'no-input'
+    'a browser with no pointer lock is still admitted',
+    verdict({ pointerLock: false, touchOnly: false }) === 'pass',
+    verdict({ pointerLock: false, touchOnly: false })
+  );
+  check(
+    'a touch device with no pointer lock is still admitted',
+    verdict({ pointerLock: false, touchOnly: true }) === 'pass',
+    verdict({ pointerLock: false, touchOnly: true })
+  );
+
+  // Only two things can turn anyone away, and both are facts about the browser
+  // rather than guesses about the device.
+  check(
+    'only browser capability can reject',
+    ['browser-too-old', 'no-webgl2'].every((code) =>
+      PREFLIGHT_SOURCE.includes(`code: '${code}'`)
+    ) && (PREFLIGHT_SOURCE.match(/code: '/g) || []).length === 2,
+    `${(PREFLIGHT_SOURCE.match(/code: '/g) || []).length} rejection codes in evaluate()`
   );
 
   // A broken browser is told what is broken, not what device it is. WebGL2 is
@@ -293,7 +317,7 @@ const verdict = (overrides) => {
   );
 
   // Every report has to be worth reading.
-  for (const broken of [{ modules: false }, { webgl2: false }, { pointerLock: false }]) {
+  for (const broken of [{ modules: false }, { webgl2: false }]) {
     const report = evaluate({ ...ok, ...broken });
     check(
       `${report.code} has a title and an explanation`,
@@ -351,7 +375,8 @@ const verdict = (overrides) => {
   // whole fix.
   check(
     'the OS is decided before any pointer query',
-    source.indexOf('function isMobileOS') < source.indexOf("matchMedia('(pointer: coarse)')")
+    PREFLIGHT_SOURCE.indexOf('function isMobileOS') <
+      PREFLIGHT_SOURCE.indexOf("matchMedia('(pointer: coarse)')")
   );
 
   // Every profile must still find WebGL2, which the demo needs as much as the

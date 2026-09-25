@@ -214,15 +214,27 @@
   // `code` is for tests and the console; `title` and `lines` are what the user
   // reads.
   //
-  // Touch devices are NOT rejected. They used to be, when walking the surface
-  // was the only thing on offer; they now get the guided demo instead (see
-  // DEMO in config.js), which needs exactly the same browser features as the
-  // interactive version and none of the input. So `touchOnly` is no longer a
-  // verdict here — it is reported in env() and app.js reads it to decide which
-  // of the two experiences to start.
+  // This function decides one thing only: can the BROWSER run the renderer.
+  // Modules, import maps, WebGL2 — facts that can be established by asking,
+  // where a wrong answer means a blank screen either way.
   //
-  // What remains a rejection is having NEITHER usable input: no touch and no
-  // Pointer Lock means nothing here can be driven or watched.
+  // It deliberately does NOT decide whether the DEVICE can be driven, and that
+  // restraint was bought the hard way. Three times a device that could play
+  // perfectly well was turned away by an input check: every Android phone by
+  // `any-pointer: fine`, then a Surface Pro with its keyboard attached by
+  // `pointer: coarse`, and then the same Surface again by the combination that
+  // was supposed to have fixed it. The pointer media queries describe input
+  // hardware hedged by whatever might be clipped on later, and they do not
+  // reliably answer "is there a keyboard here".
+  //
+  // So nothing is turned away for being the wrong shape of device any more.
+  // Everything that gets this far starts the interactive experience, and
+  // someone without a keyboard discovers that in the ordinary way — by finding
+  // that W does not move them. That is a far smaller failure than being shown
+  // an error screen on a machine that would have worked.
+  //
+  // `touchOnly` is still reported in env(), because the guided demo reads it
+  // when it is switched on. It is no longer a verdict.
 
   function evaluate(env) {
     if (env.modules === false || env.importMaps === false) {
@@ -249,19 +261,6 @@
       };
     }
 
-    if (!env.touchOnly && !env.pointerLock) {
-      return {
-        code: 'no-input',
-        title: 'This browser cannot be driven',
-        lines: [
-          'Transurfia needs either Pointer Lock, to walk the surface with a ' +
-            'mouse and keyboard, or a touch screen, to watch the guided demo. ' +
-            'This browser reports neither.',
-          'A current version of Chrome, Edge, Firefox or Safari will work.',
-        ],
-      };
-    }
-
     return null;
   }
 
@@ -276,19 +275,6 @@
           'acceleration or try another browser.',
         'The browser reported WebGL2 as available, but refused to create a ' +
           'context for it.',
-      ],
-    },
-    // Raised by app.js, not by evaluate(), because whether a touch device can
-    // be turned away depends on DEMO.enabled in config.js — and this file is a
-    // classic script that cannot import it. The preflight's own job is to
-    // decide whether the BROWSER can run the thing; what to do with a device
-    // that cannot be driven is the application's policy.
-    'touch-device': {
-      title: 'This one needs a keyboard',
-      lines: [
-        'Transurfia is walked with W, A, S and D, and looked around with the ' +
-          'mouse held captive by the window. There is no touch version yet.',
-        'Open it on a desktop or a laptop and it will work.',
       ],
     },
     'context-lost': {

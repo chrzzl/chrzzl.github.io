@@ -90,34 +90,37 @@ console.log('\ndesktop unchanged');
   check('the demo is currently disabled', DEMO.enabled === false);
 }
 
-// --- what a device that cannot be driven is told -----------------------------
+// --- nobody is turned away for being the wrong device ------------------------
 {
   const { readFileSync } = await import('node:fs');
   const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
   const app = read('../src/app.js');
   const preflight = read('../src/preflight.js');
 
-  // The whole point: a phone must not be handed a welcome screen that does
-  // nothing when tapped. That was the original bug, and switching the demo off
-  // reopens the door to it unless the device is turned away explicitly.
+  // The history here is three devices that could play and were refused: every
+  // Android phone, a Surface Pro with its keyboard on, and then the same
+  // Surface again by the check that was supposed to have fixed it. Each time
+  // the detection was tightened and each time it was wrong somewhere else, so
+  // the gate is gone rather than tuned once more.
   check(
-    'app.js turns a touch device away when the demo is off',
-    /if \(!demoMode && isTouchDevice\(\)\)/.test(app)
+    'app.js does not turn any device away',
+    !/isTouchDevice\(\)\)\s*\{[\s\S]{0,200}reportFailure/.test(app),
+    'a device-shaped rejection has come back'
   );
-  check(
-    'and does so before the renderer is built',
-    app.indexOf('isTouchDevice()') < app.indexOf('new THREE.WebGLRenderer'),
-    'a half-built application would be left running behind the message'
-  );
-  check(
-    'there is a message to show it',
-    /'touch-device':/.test(preflight) && /needs a keyboard/i.test(preflight)
-  );
+  check('there is no touch-device error screen left', !/'touch-device':/.test(preflight));
+  check('there is no no-input error screen left', !/'no-input'/.test(preflight));
 
-  // ...and a phone with a keyboard attached can still get in.
+  // What may still reject: facts about the browser, where a wrong answer means
+  // a blank screen whatever we do.
+  check('WebGL2 can still reject', /'no-webgl2'/.test(preflight));
+  check('an ancient browser can still reject', /'browser-too-old'/.test(preflight));
+
+  // Only the renderer failing may stop the app now.
+  const failures = [...app.matchAll(/reportFailure\('([a-z-]+)'/g)].map((m) => m[1]);
   check(
-    'the ?mode=interactive escape hatch still exists',
-    /mode=\(demo\|interactive\)/.test(preflight)
+    'app.js only reports renderer failures',
+    failures.every((f) => f === 'renderer-failed' || f === 'context-lost'),
+    failures.join(', ')
   );
 }
 
