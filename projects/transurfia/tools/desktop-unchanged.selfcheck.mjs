@@ -82,6 +82,43 @@ console.log('\ndesktop unchanged');
 
   // --- the demo can be switched off entirely ---
   check('the demo has an off switch', typeof DEMO.enabled === 'boolean');
+
+  // It is currently OFF. The demo was not good enough to show, so Transurfia
+  // is interactive everywhere and a device that cannot be driven is told so.
+  // If this ever flips back to true, the checks below about turning touch
+  // devices away stop being the right ones.
+  check('the demo is currently disabled', DEMO.enabled === false);
+}
+
+// --- what a device that cannot be driven is told -----------------------------
+{
+  const { readFileSync } = await import('node:fs');
+  const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+  const app = read('../src/app.js');
+  const preflight = read('../src/preflight.js');
+
+  // The whole point: a phone must not be handed a welcome screen that does
+  // nothing when tapped. That was the original bug, and switching the demo off
+  // reopens the door to it unless the device is turned away explicitly.
+  check(
+    'app.js turns a touch device away when the demo is off',
+    /if \(!demoMode && isTouchDevice\(\)\)/.test(app)
+  );
+  check(
+    'and does so before the renderer is built',
+    app.indexOf('isTouchDevice()') < app.indexOf('new THREE.WebGLRenderer'),
+    'a half-built application would be left running behind the message'
+  );
+  check(
+    'there is a message to show it',
+    /'touch-device':/.test(preflight) && /needs a keyboard/i.test(preflight)
+  );
+
+  // ...and a phone with a keyboard attached can still get in.
+  check(
+    'the ?mode=interactive escape hatch still exists',
+    /mode=\(demo\|interactive\)/.test(preflight)
+  );
 }
 
 // --- the source-level guarantees -------------------------------------------

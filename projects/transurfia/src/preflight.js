@@ -278,6 +278,19 @@
           'context for it.',
       ],
     },
+    // Raised by app.js, not by evaluate(), because whether a touch device can
+    // be turned away depends on DEMO.enabled in config.js — and this file is a
+    // classic script that cannot import it. The preflight's own job is to
+    // decide whether the BROWSER can run the thing; what to do with a device
+    // that cannot be driven is the application's policy.
+    'touch-device': {
+      title: 'This one needs a keyboard',
+      lines: [
+        'Transurfia is walked with W, A, S and D, and looked around with the ' +
+          'mouse held captive by the window. There is no touch version yet.',
+        'Open it on a desktop or a laptop and it will work.',
+      ],
+    },
     'context-lost': {
       title: 'The graphics context was lost',
       lines: [

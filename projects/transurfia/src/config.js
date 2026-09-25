@@ -315,9 +315,21 @@ export const SCULPTURES = {
 // whole route through the real physics to prove it stays clear, so a change
 // fails loudly there rather than quietly on a visitor's phone.
 export const DEMO = {
-  // Whether touch devices get the demo at all. False sends them to the same
-  // "desktop only" screen they used to get.
-  enabled: true,
+  // Whether touch devices get the demo at all.
+  //
+  // Currently FALSE: the guided demo is not good enough to show. With it off,
+  // Transurfia is interactive everywhere and a device that cannot be driven is
+  // told so plainly, which is the honest version of "not ready" — better than
+  // a tour nobody enjoys watching.
+  //
+  // Everything the demo needs is still here and still tested (autoplayer.js,
+  // the route below, tools/route.selfcheck.mjs). Turning this back to true is
+  // the whole of switching it on again.
+  //
+  // Note that a phone with a Bluetooth keyboard and mouse genuinely can play,
+  // and `?mode=interactive` lets one through — see forcedMode() in
+  // preflight.js. What is being turned away is the device that has neither.
+  enabled: false,
 
   // Which way the player faces at the start of each lap, in degrees. 0 looks
   // down -Z, which is up the minimap and straight at the glued top edge of

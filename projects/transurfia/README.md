@@ -31,30 +31,19 @@ much angle there as a point is supposed to have.
 
 ## On a phone
 
-Walking this surface needs a mouse and a keyboard — you look with the pointer
-locked to the window, and turning is measured in mouse pixels. So touch devices
-get a **guided demo** instead: the player walks a fixed 34-second route through
-three different edge gluings while you watch, looping until you leave.
+It does not run on one, and says so. Transurfia is walked with WASD and looked
+around with the pointer locked to the window, so a device with neither a
+keyboard nor a mouse is turned away with an explanation rather than handed a
+welcome screen that does nothing when tapped.
 
-Which version a device gets is decided by the OPERATING SYSTEM, not by pointer
-media queries. Two earlier attempts trusted those and both were wrong on real
-hardware: `any-pointer: fine` matches on Android (a phone can take a stylus), so
-every Android phone was sent to the desktop version; and `pointer: coarse`
-matches on a Surface Pro even with the Type Cover attached, so a real computer
-was sent to the demo. The queries describe input hardware hedged by what might
-be plugged in later, which is not the question. The pointer queries are now
-consulted only as a tie-breaker among desktop-class systems, where the single
-genuine case is a Windows or ChromeOS tablet with nothing attached.
+A guided demo for touch devices exists in the code — `src/autoplayer.js` drives
+the real player along `DEMO.route` by pressing its movement keys, so it is the
+real surface and not a recording — but it is **switched off**: it was not good
+enough to show. `DEMO.enabled` in `config.js` is the whole of turning it back
+on, and `tools/route.selfcheck.mjs` still keeps the route honest meanwhile.
 
-Whatever it decides, **`?mode=demo` and `?mode=interactive` override it**, the
-demo carries a permanent "Play it yourself" link, and one `console.info` line on
-every load says which mode was chosen and what the device reported.
-
-It is not a recording, and it is not a second implementation. `src/autoplayer.js`
-presses the real player's movement keys and turns its head, then lets
-`player.update()` run exactly as it does for a human — same resolver, same
-gluings, same cone-point capture. `PlayerController` needed no changes at all.
-The route is `DEMO.route` in `config.js`.
+A phone with a Bluetooth keyboard and mouse genuinely can play; `?mode=interactive`
+lets one through.
 
 ## Requirements
 

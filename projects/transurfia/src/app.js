@@ -36,6 +36,20 @@ export function createApp() {
   // through the renderer, the surface or the player.
   const demoMode = DEMO.enabled && isTouchDevice();
 
+  // With the demo switched off, a device that cannot be driven has nothing to
+  // do here — and is told so, before a single thing is built. Starting anyway
+  // would put a canvas over the explanation and leave a welcome screen that
+  // does nothing when tapped, which is exactly the failure this whole preflight
+  // exists to prevent.
+  //
+  // `?mode=interactive` reaches this as a non-touch device, so a phone with a
+  // keyboard and mouse attached still gets in.
+  if (!demoMode && isTouchDevice()) {
+    const error = new Error('touch-only device and DEMO.enabled is false');
+    reportFailure('touch-device', error);
+    throw error;
+  }
+
   // Cleared when the application must stop for good — currently only a lost
   // WebGL context. The frame loop checks it and stops requesting frames, so a
   // dead renderer is not left spinning behind the error screen.
